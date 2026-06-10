@@ -1,0 +1,28 @@
+# Python Virtual Environments
+venv/
+.venv/
+env/
+__pycache__/
+
+# RL Models and Logs
+logs/
+tb_logs/
+models/
+*.zip
+*.pt
+*.pth
+
+# Map Datasets (Adjust these if you want to track a small subset)
+*Dataset/
+OccupancyGrids/
+TestDataset/
+EvalDataset/
+debug_grid_alignment/
+debug_plots/
+eval_plots_debug/
+test_plots_debug/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
