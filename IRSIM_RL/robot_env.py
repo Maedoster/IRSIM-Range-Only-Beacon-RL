@@ -592,7 +592,7 @@ class RobotNavEnv(gym.Env):
             
         
     def reward(self, data):
-        latest_scan, dist_ghost, cos, sin, collision, arrive, diff_rad, action, real_goal = data
+        latest_scan, dist_ghost, cos, sin, collision, arrive, diff_rad, action, real_goal, true_v, true_w = data
         
         # --- 1. Base Time Penalty ---
         total_rew = self.step_penalty 
@@ -914,7 +914,7 @@ class RobotNavEnv(gym.Env):
         sim_data = self._extract_sim_data(action=[0.0, 0.0])
         (
             latest_scan, distance, cos, sin, 
-            collision, arrive, diff_rad, action, real_goal
+            collision, arrive, diff_rad, action, real_goal, true_v, true_w
         ) = sim_data
 
         # 2. Set your tracking history variables using the unpacked data
