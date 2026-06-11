@@ -125,12 +125,13 @@ class RobotNavEnv(gym.Env):
         self.safe_dist_front = 0.20
         self.safe_dist_side = 0.10  
 
-        self.standoff_dist = 0.8
+        self.standoff_dist = 0.5
         self.standoff_margin = 0.15
         self.heading_margin = 0.2
         self.w_heading = 2.0
 
         self.collision_penalty = -10
+        self.collision_goal_penalty = -5
         self.truncation_penalty = -5
         self.step_penalty = -0.005 
 
@@ -139,7 +140,7 @@ class RobotNavEnv(gym.Env):
         self.current_path = []
         self.waypoint_index = 0
         self.nav_goal = np.array([0.0, 0.0]) 
-        self.state_dim = 49
+        self.state_dim = 51
         self.max_steps = 500  
         self.astar_cooldown = 60  
         
@@ -258,10 +259,14 @@ class RobotNavEnv(gym.Env):
         self.astar_cooldown = 0
         self.first_step = True
         self.prev_action = np.zeros(2)
+
+        self.last_position = None
+        self.last_theta = None
         
         # --- NEW: Reset success/failure flags ---
         self.success = False 
         self.failure = False
+        self.crashed_into_goal = False
         self.done = False
         
         if start_position is not None:
@@ -280,6 +285,7 @@ class RobotNavEnv(gym.Env):
         return {
             'success': 1.0 if self.success else 0.0,
             'collision': 1.0 if self.failure else 0.0,
+            'goal_crash': 1.0 if self.crashed_into_goal else 0.0,
             'reward': reward, 
             'target_error': target_error, 
             'total_distance': self.total_distance,
@@ -680,8 +686,8 @@ class RobotNavEnv(gym.Env):
             elif dist_ghost < (self.standoff_dist - self.standoff_margin):
                 # Penalty for breaching the standoff zone (getting too close)
                 # This prevents it from accidentally ramming the target
-                total_rew -= 2.0
-                self.failure = True
+                total_rew -= self.collision_goal_penalty
+                self.crashed_into_goal = True
                 self.done = True
 
         elif not is_final_stage and dist_ghost < 0.5:
@@ -693,9 +699,29 @@ class RobotNavEnv(gym.Env):
     def _extract_sim_data(self, action):
         scan = self.sim.get_lidar_scan()
         latest_scan = scan["ranges"] if isinstance(scan, dict) else scan
-        robot_state = self.sim.get_robot_state()  
+        robot_state = self.sim.get_robot_state()  # [x, y, theta]
         
-        # GROUND TRUTH (For the reward function only)
+        # --- Compute Ground Truth Kinematics ---
+        dt = getattr(self, "dt", 0.1)
+        current_pos = np.array([robot_state[0, 0], robot_state[1, 0]])
+        current_theta = robot_state[2, 0]
+        
+        if self.last_position is not None and self.time > 0:
+            # Linear velocity: distance moved over time
+            true_v = np.linalg.norm(current_pos - self.last_position) / dt
+            # Angular velocity: delta theta normalized to [-pi, pi] over time
+            diff_theta = (current_theta - self.last_theta + np.pi) % (2 * np.pi) - np.pi
+            true_w = diff_theta / dt
+        else:
+            true_v = 0.0
+            true_w = 0.0
+            
+        # Cache for next iteration's velocity calculation
+        self.last_position = current_pos
+        self.last_theta = current_theta
+        
+        
+        # Keep your existing target/ghost calculations...
         if hasattr(self.sim, 'robot'):
             real_goal = np.array([self.sim.robot.goal[0,0], self.sim.robot.goal[1,0]])
             collision = self.sim.robot.collision
@@ -707,10 +733,8 @@ class RobotNavEnv(gym.Env):
             arrive = info.arrive
 
         goal_vector = [self.nav_goal[0] - robot_state[0,0], self.nav_goal[1] - robot_state[1,0]]
-        
         distance_to_ghost = np.linalg.norm(goal_vector)
         
-        # Navigation math based on the Ghost
         norm_pose = np.array([np.cos(robot_state[2,0]), np.sin(robot_state[2,0])])
         norm_ghost = goal_vector / (distance_to_ghost + 1e-6)
         
@@ -718,13 +742,12 @@ class RobotNavEnv(gym.Env):
         sin_val = np.cross(norm_pose, norm_ghost)
         diff_rad = np.arctan2(sin_val, cos_val)
         
-        # We return both the Ghost distance (for the robot to act) 
-        # and the Real Goal (for the reward to judge)
-        return latest_scan, distance_to_ghost, cos_val, sin_val, collision, arrive, diff_rad, action, real_goal
+        # Append true_v and true_w to the returned data tuple
+        return latest_scan, distance_to_ghost, cos_val, sin_val, collision, arrive, diff_rad, action, real_goal, true_v, true_w
                 
     def prepare_state(self, data):
-        # 1. FIXED UNPACKING: Variable names now perfectly match _extract_sim_data
-        latest_scan, distance, cos, sin, collision, arrive, diff_rad, action, real_goal = data
+        # Unpack the 11 items now being returned
+        latest_scan, distance, cos, sin, collision, arrive, diff_rad, action, real_goal, true_v, true_w = data
         
         scan_arr = np.array(latest_scan)
         scan_arr = np.clip(scan_arr, 0, self.set_max_range)
@@ -735,15 +758,17 @@ class RobotNavEnv(gym.Env):
             1.0 if self.state == "DOCKING" else 0.0
         ]
         
-        # 2. FIXED SCALING: Clipped distance and simplified angular action scaling
         clipped_dist = np.clip(distance, 0, self.set_max_range)
         
+        # Add true physical metrics alongside your control inputs
         extra_features = [
             clipped_dist / self.set_max_range, 
             cos, 
             sin, 
-            action[0] / 0.6,    # Maps [0.0, 0.6] -> [0.0, 1.0]
-            action[1] / 1.2,    # Maps [-1.2, 1.2] -> [-1.0, 1.0]
+            action[0] / 0.6,    # Intended linear
+            action[1] / 1.2,    # Intended angular
+            true_v / 0.6,       # REAL physical linear velocity (Normalized [0, 1])
+            true_w / 1.2,       # REAL physical angular velocity (Normalized [-1, 1])
             *state_encoded
         ]
 
@@ -751,14 +776,9 @@ class RobotNavEnv(gym.Env):
         max_bins = self.observation_space.shape[0] - num_extra
         
         bins = np.array_split(scan_arr, max_bins)
-        
-        # Proximity inversion (Brilliant feature engineering!)
         min_values = 1.0 - (np.array([np.min(b) for b in bins]) / self.set_max_range)
 
-        # Concatenate into a single numpy array
         full_state = np.concatenate([min_values, np.array(extra_features, dtype=np.float32)])
-        
-        # Terminal state is reached if there's a collision or the robot arrives at the goal
         terminal = collision or arrive
         
         return full_state, terminal
@@ -857,6 +877,8 @@ class RobotNavEnv(gym.Env):
 
         # Get the real robot and goal states
         robot_state = self.sim.get_robot_state()
+
+
         real_goal = self.sim.robot.goal if hasattr(self.sim, 'robot') else self.sim.get_robot_info(0).goal
         
         # Format robot position for the PF: [x, vx, y, vy]

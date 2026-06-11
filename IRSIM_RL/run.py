@@ -12,7 +12,7 @@ from stable_baselines3.common.utils import set_random_seed
 # ==========================================
 # CONFIGURATION
 # ==========================================
-EXPERIMENT_DIR_NAME = "run_SAC_True_68325" 
+EXPERIMENT_DIR_NAME = "run_SAC_True_10213" 
 MODEL_FILE_NAME = "best_model" 
 
 NUM_EPISODES = 5
@@ -55,7 +55,9 @@ def main():
             render=True, 
             pf_active=pf_active, 
             seed=INITIAL_SEED, 
-            is_testing=True
+            is_testing=True,
+            is_eval=False
+            
         )
     
     venv = DummyVecEnv([make_env])
@@ -101,7 +103,7 @@ def main():
                 info = infos[0]
                 result = "SUCCESS" if info.get('success') else "FAILED"
                 print(f"Result: {result} | Total Reward: {total_reward:.2f} | Steps: {info.get('steps')} | Error: {info.get('target_error'):.2f}")
-                venv.close()  # Close the environment to reset the display properly
+                venv.reset()  # Reset the environment for the next episode
 
     venv.close()
 

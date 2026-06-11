@@ -85,7 +85,7 @@ def convert(layout):
                 "noise": True,
                 "std": 0.05,
                 "angle_std": 0.002,
-                "offset": [0.15, 0, 0],
+                "offset": [0, 0, 0],
                 "alpha": 0.3
             }
         ]
