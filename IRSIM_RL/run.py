@@ -12,7 +12,7 @@ from stable_baselines3.common.utils import set_random_seed
 # ==========================================
 # CONFIGURATION
 # ==========================================
-EXPERIMENT_DIR_NAME = "run_SAC_True_10213" 
+EXPERIMENT_DIR_NAME = "run_SAC_True_20332" 
 MODEL_FILE_NAME = "best_model" 
 
 NUM_EPISODES = 5

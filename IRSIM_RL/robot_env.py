@@ -121,7 +121,7 @@ class RobotNavEnv(gym.Env):
         self.w_wiggle = 0.08            #Before 0.05
         
         self.w_obstacle_front = 10.0  
-        self.w_obstacle_side = 5.0    
+        self.w_obstacle_side = 3.0    
         self.safe_dist_front = 0.20
         self.safe_dist_side = 0.10  
 
@@ -559,34 +559,22 @@ class RobotNavEnv(gym.Env):
         return False
 
 
-    def _get_random_valid_pos(self, margin=0.3):
-        """Uses the occupancy grid to find a truly navigable spawn point."""
+    def _get_random_valid_pos(self):
+        """Uses the inflated occupancy grid to find a truly navigable spawn point."""
         map_obj = self.sim.get_map()
         w, h = map_obj.width, map_obj.height
         
-        # Increased to 500 to account for denser obstacle maps
+        # 500 attempts takes virtually 0 milliseconds now
         max_attempts = 500 
         for _ in range(max_attempts):
             x = float(self.np_random.uniform(0.5, w - 0.5))
             y = float(self.np_random.uniform(0.5, h - 0.5))
             
-            # Check 1: Is it in the 'White' area of the grid?
+            # Fast O(1) bounds and occupancy check handles everything
             if self.is_valid_pos(x, y):
-                
-                # Check 2: Is it physically clear (Lidar/Collision)?
-                self.sim.robot.set_state(np.array([[x], [y], [0.0]]))
-                self.sim.step(np.array([[0.0], [0.0]]))
-                
-                scan = self.sim.get_lidar_scan()
-                ranges = scan["ranges"] if isinstance(scan, dict) else scan
-                
-                # MISSING LOGIC ADDED: Ensure the closest obstacle is further than the margin
-                if np.min(ranges) >= margin:
-                    return x, y
+                return x, y
         
         logging.error("Failed to find valid pos after %d attempts.", max_attempts)
-        # It is much safer to raise an exception and let your environment 
-        # reset/handle it rather than blindly spawning inside a wall.
         return None, None
                 
             
@@ -824,7 +812,7 @@ class RobotNavEnv(gym.Env):
             self.sim.reset()
 
             # 3. Randomize Robot Position
-            rx, ry = self._get_random_valid_pos(margin=0.5)
+            rx, ry = self._get_random_valid_pos()
             
             # CATCH 1: Robot spawn failed
             if rx is None:
@@ -839,7 +827,7 @@ class RobotNavEnv(gym.Env):
             goal_spawn_failed = False
             
             for _ in range(max_attempts):
-                gx, gy = self._get_random_valid_pos(margin=0.5)
+                gx, gy = self._get_random_valid_pos()
                 
                 # CATCH 2: Goal spawn failed completely
                 if gx is None:
