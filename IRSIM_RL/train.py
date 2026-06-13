@@ -53,7 +53,7 @@ TOTAL_TIMESTEPS = 3000000
 EVAL_EPISODES = 100
 
 SAVE_FREQ = 20000  # Save every N environment steps (adjusted by number of envs in callbacks)
-EVAL_FREQ = 30000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
+EVAL_FREQ = 50000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
 
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run

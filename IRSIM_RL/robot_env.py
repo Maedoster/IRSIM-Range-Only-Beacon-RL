@@ -52,7 +52,7 @@ class RobotNavEnv(gym.Env):
         self.worker_id = worker_id
 
         # 1. SEED DISTRIBUTION
-        if self.is_eval and not self.is_serial_eval:
+        if (self.is_eval and not self.is_serial_eval) or self.is_testing:
             master_seeds = [self.seed + i for i in range(num_eval_episodes)]
             # Distributed parallel evaluation seeds
             self.eval_seeds = [master_seeds[i] for i in range(len(master_seeds)) if i % num_workers == worker_id]
@@ -64,6 +64,7 @@ class RobotNavEnv(gym.Env):
             self.eval_index = 0
             map_dir = os.path.join(os.path.dirname(MAP_DIR), "EvalDataset")
         elif self.is_testing:
+            self.test_index = 0
             map_dir = os.path.join(os.path.dirname(MAP_DIR), "TestDataset")
         else:
             map_dir = os.path.join(os.path.dirname(MAP_DIR), "IRSimDataset")
@@ -77,6 +78,8 @@ class RobotNavEnv(gym.Env):
             raise ValueError(f"Nessun file .yaml trovato in {map_dir}")
         
         if self.is_eval and not self.is_serial_eval and num_workers > 1:
+            self.map_files = all_maps[worker_id::num_workers]
+        elif self.is_testing and num_workers > 1:
             self.map_files = all_maps[worker_id::num_workers]
         else:
             self.map_files = all_maps
@@ -122,8 +125,8 @@ class RobotNavEnv(gym.Env):
         
         self.w_obstacle_front = 10.0  
         self.w_obstacle_side = 3.0    
-        self.safe_dist_front = 0.20
-        self.safe_dist_side = 0.10  
+        self.safe_dist_front = 0.40 #Before 0.20
+        self.safe_dist_side = 0.15  #Before 0.10
 
         self.standoff_dist = 0.5
         self.standoff_margin = 0.15
@@ -230,6 +233,39 @@ class RobotNavEnv(gym.Env):
                     py = self.pf.x[:, 2]
                     points = np.stack([px, py], axis=1).tolist()
                     self.sim.draw_points(points=points, c='cyan', s=5)
+
+    def _save_eval_screenshot(self, selected_yaml):
+        """Saves a screenshot of the initial map configuration during evaluation."""
+        if not self.is_eval:
+            return
+        
+        # 1. Use absolute paths so you know exactly where files are saved
+        # This creates the folder in the same directory as this script
+        screenshot_dir = os.path.join(BASE_DIR, "eval_map_configs")
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        map_basename = os.path.basename(selected_yaml).replace(".yaml", "")
+        current_eval_idx = (self.eval_index - 1) % len(self.eval_seeds) 
+        save_path = os.path.join(screenshot_dir, f"eval_{current_eval_idx:03d}_{map_basename}.png")
+        
+        print(f"[Eval Tracker] Attempting to save map screenshot to:\n -> {save_path}")
+        
+        try:
+            # 2. Call your custom render method to draw the paths, ghost, and grid
+            self.render()
+            
+            # 3. Grab the active Matplotlib figure directly
+            fig = plt.gcf()
+            
+            # 4. Check if the figure actually has content (axes) before saving
+            if fig.get_axes(): 
+                fig.savefig(save_path, bbox_inches='tight')
+                print(f"[Eval Tracker] Success! Screenshot saved.")
+            else:
+                print(f"[Eval Tracker Warning] The Matplotlib figure is empty. The simulator may not have drawn anything.")
+                
+        except Exception as e:
+            print(f"[Eval Tracker Error] Failed to save screenshot: {e}")
 
     def close(self):
         """Ensure all resources are freed when the environment is closed."""
@@ -536,7 +572,7 @@ class RobotNavEnv(gym.Env):
 
         # Calculate robot radius in pixels
         res = self.map_meta['resolution']
-        safety_margin = 0.10  # 10 cm buffer
+        safety_margin = 0.15  # 15 cm buffer
         pixel_radius = int(np.ceil((self.robot_radius + safety_margin) / res))
         
         # Create a circular kernel for dilation
@@ -618,7 +654,7 @@ class RobotNavEnv(gym.Env):
 
         # --- 3. Stable Obstacle Avoidance ---
         num_beams = len(latest_scan)
-        cone_width_in_beams = 10 
+        cone_width_in_beams = 15 #before 10 
         center_idx = num_beams // 2 
         half_width = cone_width_in_beams // 2 
 
@@ -674,7 +710,7 @@ class RobotNavEnv(gym.Env):
             elif dist_ghost < (self.standoff_dist - self.standoff_margin):
                 # Penalty for breaching the standoff zone (getting too close)
                 # This prevents it from accidentally ramming the target
-                total_rew -= self.collision_goal_penalty
+                total_rew += self.collision_goal_penalty
                 self.crashed_into_goal = True
                 self.done = True
 
@@ -788,7 +824,10 @@ class RobotNavEnv(gym.Env):
                 
                 idx = self.eval_index % len(self.map_files)
                 # Advance the index for the next attempt (or next episode)
-                self.eval_index = (self.eval_index + 1) % len(self.eval_seeds)
+                if self.is_eval:
+                    self.eval_index = (self.eval_index + 1) % len(self.eval_seeds)
+                if self.is_testing:
+                    self.test_index = (self.test_index + 1) % len(self.map_files)
                 
             else:
                 if seed is not None:
@@ -897,6 +936,8 @@ class RobotNavEnv(gym.Env):
 
         # Force IRSIM to update sensors at the new location
         self.sim.step(np.array([[0.0], [0.0]])) 
+
+        self._save_eval_screenshot(selected_yaml)
         
         # 1. Unpack the tuple immediately to make Pylance and Python happy
         sim_data = self._extract_sim_data(action=[0.0, 0.0])
