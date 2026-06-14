@@ -69,8 +69,8 @@ def convert(layout):
     robot_config = [{ 
         "kinematics": {"name": "diff"},
         "shape": {"name": "circle", "radius": 0.15},
-        "vel_min": [0, -2],
-        "vel_max": [2, 2],
+        "vel_min": [0, -1.2],
+        "vel_max": [0.6, 1.2],
         "state": [1.0, 1.0, 0.0],  # Default start position
         "goal": [2.0, 2.0, 0.0],   # Default goal position
         "arrive_mode": "state",

@@ -11,9 +11,11 @@ models/
 *.zip
 *.pt
 *.pth
+eval_map_configs/
+
 
 # Map Datasets (Adjust these if you want to track a small subset)
-*Dataset/
+IRSimDataset/
 OccupancyGrids/
 TestDataset/
 EvalDataset/
@@ -21,6 +23,11 @@ debug_grid_alignment/
 debug_plots/
 eval_plots_debug/
 test_plots_debug/
+easy_plots_debug/
+medium_plots_debug/
+hard_plots_debug/
+IRSimDataset_Sorted/
+
 
 # IDE and OS files
 .vscode/

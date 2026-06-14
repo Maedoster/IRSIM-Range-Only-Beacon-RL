@@ -123,10 +123,10 @@ class RobotNavEnv(gym.Env):
         self.w_rotation = 0.05          #Before 0.02
         self.w_wiggle = 0.08            #Before 0.05
         
-        self.w_obstacle_front = 10.0  
-        self.w_obstacle_side = 3.0    
+        self.w_obstacle_front = 4.0 #before 10.0  
+        self.w_obstacle_side = 1.5  #before 3.0    
         self.safe_dist_front = 0.40 #Before 0.20
-        self.safe_dist_side = 0.15  #Before 0.10
+        self.safe_dist_side = 0.20  #Before 0.10
 
         self.standoff_dist = 0.5
         self.standoff_margin = 0.15
@@ -572,7 +572,7 @@ class RobotNavEnv(gym.Env):
 
         # Calculate robot radius in pixels
         res = self.map_meta['resolution']
-        safety_margin = 0.15  # 15 cm buffer
+        safety_margin = 0.30  # 15 cm buffer
         pixel_radius = int(np.ceil((self.robot_radius + safety_margin) / res))
         
         # Create a circular kernel for dilation
@@ -654,7 +654,7 @@ class RobotNavEnv(gym.Env):
 
         # --- 3. Stable Obstacle Avoidance ---
         num_beams = len(latest_scan)
-        cone_width_in_beams = 15 #before 10 
+        cone_width_in_beams = 11 #before 10 
         center_idx = num_beams // 2 
         half_width = cone_width_in_beams // 2 
 

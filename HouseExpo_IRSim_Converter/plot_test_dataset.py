@@ -7,8 +7,8 @@ import math
 # PATH CONFIGURATION
 # ----------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_ROOT = os.path.join(BASE_DIR, "EvalDataset")
-DEBUG_DIR = os.path.join(BASE_DIR, "eval_plots_debug")
+TEST_ROOT = os.path.join(BASE_DIR, "IRSimDataset_Sorted", "Hard")
+DEBUG_DIR = os.path.join(BASE_DIR, "hard_plots_debug")
 
 os.makedirs(DEBUG_DIR, exist_ok=True)
 
