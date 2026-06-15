@@ -55,6 +55,8 @@ EVAL_EPISODES = 300
 SAVE_FREQ = 20000  # Save every N environment steps (adjusted by number of envs in callbacks)
 EVAL_FREQ = 50000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
 
+SAVE_EVAL_MAPS = False
+
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
@@ -118,6 +120,7 @@ def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_worker
             worker_id=rank,            
             num_workers=num_workers,    # Fixed: was NUM_EVAL_ENVS
             num_eval_episodes=EVAL_EPISODES  
+            save_eval_maps =SAVE_EVAL_MAPS
             
         )
                     

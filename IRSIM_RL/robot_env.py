@@ -42,7 +42,7 @@ MAX_NODES = 100000
 class RobotNavEnv(gym.Env):
 
     def __init__(self, render=False, world_file="robot_world.yaml", pf_active=False, seed=0, 
-                 is_eval=False, is_testing=False, is_serial_eval=True, worker_id=0, num_workers=1, num_eval_episodes=8):
+                 is_eval=False, is_testing=False, is_serial_eval=True, worker_id=0, num_workers=1, num_eval_episodes=8, save_eval_maps=False):
         super(RobotNavEnv, self).__init__()
 
         self.seed = seed
@@ -50,6 +50,7 @@ class RobotNavEnv(gym.Env):
         self.is_testing = is_testing 
         self.is_serial_eval = is_serial_eval 
         self.worker_id = worker_id
+        self.save_eval_maps = save_eval_maps
 
         # 1. SEED DISTRIBUTION
         if (self.is_eval and not self.is_serial_eval) or self.is_testing:
@@ -937,7 +938,8 @@ class RobotNavEnv(gym.Env):
         # Force IRSIM to update sensors at the new location
         self.sim.step(np.array([[0.0], [0.0]])) 
 
-        self._save_eval_screenshot(selected_yaml)
+        if self.save_eval_maps:
+            self._save_eval_screenshot(selected_yaml)
         
         # 1. Unpack the tuple immediately to make Pylance and Python happy
         sim_data = self._extract_sim_data(action=[0.0, 0.0])
