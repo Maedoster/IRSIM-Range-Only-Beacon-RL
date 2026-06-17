@@ -55,7 +55,7 @@ def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
 # ==========================================
 def main():
     parser = argparse.ArgumentParser(description="Parallel RL Testing Script")
-    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_34906", help="Name of the experiment folder inside 'models/'")
+    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_16023", help="Name of the experiment folder inside 'models/'")
     parser.add_argument('--model-name', type=str, default="best_model", help="Name of the saved model zip/pkl (without extension)")
     parser.add_argument('--num-episodes', type=int, default=500, help="Total number of episodes to test")
     parser.add_argument('--num-envs', type=int, default=4, help="Number of parallel environments to run")

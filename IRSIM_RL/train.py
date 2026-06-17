@@ -60,7 +60,7 @@ SAVE_EVAL_MAPS = False
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
-RESUME_FOLDER = None  # r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_34906\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
+RESUME_FOLDER = r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_16023\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
 CHECKPOINT_NAME = "last_checkpoint"  # e.g., "best_model" or "SAC_recovery_380000_steps"
 
 
@@ -119,7 +119,7 @@ def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_worker
             is_serial_eval=USE_DUMMY_EVAL,           
             worker_id=rank,            
             num_workers=num_workers,    # Fixed: was NUM_EVAL_ENVS
-            num_eval_episodes=EVAL_EPISODES  
+            num_eval_episodes=EVAL_EPISODES,  
             save_eval_maps =SAVE_EVAL_MAPS
             
         )
@@ -661,6 +661,28 @@ def main():
     if not os.path.exists(map_path):
         print(f"Error: Map file {map_path} not found.")
         return
+
+    # ==========================================
+    # GPU CONFIGURATION
+    # ==========================================
+
+    # Force CUDA if available, otherwise warn
+    if torch.cuda.is_available():
+        DEVICE = "cuda"
+        # Set as default device for all operations
+        torch.set_default_device(DEVICE)
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        # Optional: Select specific GPU if you have multiple
+        # torch.cuda.set_device(0)  # Use GPU 0
+        print(f"[GPU] Using CUDA device: {torch.cuda.get_device_name(0)}")
+    else:
+        DEVICE = "cpu"
+        print("[WARNING] CUDA not available, falling back to CPU")
+
+    # Set environment variables for GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Use first GPU, or "" for CPU only
     
     # Determine Experiment Folder logic
     if args.resume_folder:

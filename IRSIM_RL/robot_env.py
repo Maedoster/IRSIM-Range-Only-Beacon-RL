@@ -145,7 +145,7 @@ class RobotNavEnv(gym.Env):
         self.waypoint_index = 0
         self.nav_goal = np.array([0.0, 0.0]) 
         self.state_dim = 51
-        self.max_steps = 500  
+        self.max_steps = 1500  
         self.astar_cooldown = 60  
         
         self.action_space = spaces.Box(
@@ -390,14 +390,14 @@ class RobotNavEnv(gym.Env):
         start_grid = (int(start_m[0]/res), int(start_m[1]/res))
         goal_grid = (int(goal_m[0]/res), int(goal_m[1]/res))
 
-        # 1. FIXED: Boundary check to prevent IndexError
-        def is_clear(gx, gy):
-            if not (0 <= gy < self.inflated_grid.shape[0] and 0 <= gx < self.inflated_grid.shape[1]):
-                return False
-            return self.inflated_grid[gy, gx] == 0
+        # 1. Hard Boundary & Wall Check (Using raw occupancy)
+        def is_physically_blocked(gx, gy):
+            if not (0 <= gy < self.occupancy_grid.shape[0] and 0 <= gx < self.occupancy_grid.shape[1]):
+                return True # Out of bounds is blocked
+            return self.occupancy_grid[gy, gx] == 1
 
-        # If the start or goal is inside an obstacle, fail early to save CPU
-        if not is_clear(start_grid[0], start_grid[1]) or not is_clear(goal_grid[0], goal_grid[1]):
+        # Fail early ONLY if start or goal is inside a literal structural wall
+        if is_physically_blocked(start_grid[0], start_grid[1]) or is_physically_blocked(goal_grid[0], goal_grid[1]):
             return None
 
         # queue: (f_score, g_score, current_node)
@@ -426,15 +426,23 @@ class RobotNavEnv(gym.Env):
             for dx, dy in [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
                 neighbor = (current[0] + dx, current[1] + dy)
                 
-                if is_clear(neighbor[0], neighbor[1]):
+                if not is_physically_blocked(neighbor[0], neighbor[1]):
+                    # Base kinematic cost
                     step_cost = 1.414 if dx != 0 and dy != 0 else 1.0
+                    
+                    # 2. SOFT INFLATION COST:
+                    # If the neighbor falls inside the 30cm inflation zone, add a heavy penalty.
+                    # This pushes the global path to the middle of rooms/corridors.
+                    if self.inflated_grid[neighbor[1], neighbor[0]] == 1:
+                        step_cost += 15.0  # Adjust this value to tune wall-aversion
+                        
                     new_g_score = g_score + step_cost
                     
                     if neighbor not in visited or new_g_score < visited[neighbor]:
                         visited[neighbor] = new_g_score
                         parent_map[neighbor] = current 
                         
-                        # 2. OPTIMIZED: Slight heuristic inflation (1.001) for faster tie-breaking
+                        # Slight heuristic inflation (1.001) for faster tie-breaking
                         h = math.hypot(neighbor[0]-goal_grid[0], neighbor[1]-goal_grid[1]) * 1.001
                         heapq.heappush(queue, (new_g_score + h, new_g_score, neighbor))
                             
