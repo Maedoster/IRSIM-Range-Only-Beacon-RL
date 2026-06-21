@@ -695,8 +695,12 @@ class RobotNavEnv(gym.Env):
         self.prev_dist = dist_ghost
 
         # --- 3. Stable Obstacle Avoidance ---
+        # Define the cone by the percentage of the 360-degree sweep (e.g., 11% for ~40 degrees)
         num_beams = len(latest_scan)
-        cone_width_in_beams = 11 #before 10 
+                        
+        cone_ratio = 0.11 
+        cone_width_in_beams = max(1, int(num_beams * cone_ratio))
+        
         center_idx = num_beams // 2 
         half_width = cone_width_in_beams // 2 
 
@@ -1012,6 +1016,11 @@ class RobotNavEnv(gym.Env):
         # Move the robot
         ctrl_action = np.array([[action[0]], [action[1]]])
         self.sim.step(ctrl_action)
+
+        # Only cast Lidar rays every 5th physics step
+        if self.step_counter % 5 == 0:
+            self.current_lidar_scan = self.lidar.get_scan()
+
         # --- ESTIMATION ---
         robot_state = self.sim.get_robot_state()
         robot_pos_pf = np.array([robot_state[0,0], 0.0, robot_state[1,0], 0.0])

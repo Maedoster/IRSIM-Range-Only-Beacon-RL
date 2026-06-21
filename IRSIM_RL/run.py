@@ -50,7 +50,7 @@ def main():
     # 2. Create the Env ONE TIME
     def make_env():
         return RobotNavEnv(
-            render=False, 
+            render=True, 
             pf_active=pf_active, 
             seed=INITIAL_SEED, 
             is_testing=True,
