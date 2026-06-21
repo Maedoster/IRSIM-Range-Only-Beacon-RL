@@ -77,7 +77,9 @@ class ParticleFilter(object):
         """The internal check that calls the external logic"""
         if self.is_valid_check is not None:
             return self.is_valid_check(x, y)
-        return True # Default to True if no map is loaded
+        
+        # Returns an array of True values matching the number of particles
+        return np.ones(np.asarray(x).shape, dtype=bool)
         
         
     def target_estimation(self):
@@ -103,17 +105,15 @@ class ParticleFilter(object):
             self._velocity = np.sqrt(self._x[1]**2+self._x[3]**2)
             self._orientation = np.arctan2(self._x[3],self._x[1])
         if method == 2:
-            for i in range(self.particle_number):
-               sumx += self.x[i][0]*self.w[i]
-               sumy += self.x[i][2]*self.w[i]
-               sumvx += self.x[i][1]*self.w[i]
-               sumvy += self.x[i][3]*self.w[i]
             sum_w = np.sum(self.w)
             if sum_w > 1e-12:
-                self._x = np.array([sumx, sumvx, sumy, sumvy]) / sum_w
+                # Use np.average with weights parameter to eliminate the loop entirely
+                self._x = np.average(self.x, axis=0, weights=self.w)
             else:
-                # Fallback: Just take the unweighted average if weights vanished
                 self._x = np.mean(self.x, axis=0)
+            
+            self._velocity = np.sqrt(self._x[1]**2 + self._x[3]**2)
+            self._orientation = np.arctan2(self._x[3], self._x[1])
             
             # #new approach to find the colosest particle to the mean
             # x_pos = np.where(abs(self.x.T[0]-self._x[0]) == np.amin(abs(self.x.T[0]-self._x[0])))[0][0]
@@ -129,39 +129,42 @@ class ParticleFilter(object):
         #http://www.visiondummy.com/2014/04/draw-error-ellipse-representing-covariance-matrix/
         xarray = self.x.T[0]
         yarray = self.x.T[2]
-        self.cov_matrix = np.cov(xarray, yarray)
+        self.cov_matrix = np.cov(self.x[:, 0], self.x[:, 2])
         return
 
     def init_particles(self, position, slantrange):
+        max_attempts = 200
         for i in range(self.particle_number):
             valid = False
-            # Keep trying random positions until we find one inside the room
-            while not valid:
-                t = 2*np.pi*np.random.rand()
+            attempts = 0
+            while not valid and attempts < max_attempts:
+                attempts += 1
+                t = 2 * np.pi * np.random.rand()
                 if self.method == 'area':
-                    r = np.random.rand()*self.max_pf_range*2 - self.max_pf_range
+                    r = np.random.rand() * self.max_pf_range * 2 - self.max_pf_range
                 else:
-                    r = np.random.rand()*self.std_range*2 - self.std_range + slantrange
+                    r = np.random.rand() * self.std_range * 2 - self.std_range + slantrange
                 
-                new_x = r*np.cos(t)+position[0]
-                new_y = r*np.sin(t)+position[2]
+                new_x = r * np.cos(t) + position[0]
+                new_y = r * np.sin(t) + position[2]
                 
-                # Check if the generated position is safe
                 if self.is_valid(new_x, new_y):
                     self.x[i][0] = new_x
                     self.x[i][2] = new_y
-                    valid = True # Exit the loop!
+                    valid = True
             
-            # target's orientation
+            # Fallback if map layout trapped the sampler
+            if not valid:
+                self.x[i][0] = position[0]
+                self.x[i][2] = position[2]
+            
             orientation = np.random.rand() * 2.0 * np.pi   
-            # target's velocity 
-            v = random.gauss(self.init_velocity, self.init_velocity/2)  
-            self.x[i][1] = np.cos(orientation)*v
-            self.x[i][3] = np.sin(orientation)*v
+            v = random.gauss(self.init_velocity, self.init_velocity / 2)  
+            self.x[i][1] = np.cos(orientation) * v
+            self.x[i][3] = np.sin(orientation) * v
             
         self.target_estimation()
         self.initialized = True
-        return
     
     #Noise parameters can be set by:
     def set_noise(self, forward_noise, turn_noise, sense_noise, velocity_noise):
@@ -178,19 +181,17 @@ class ParticleFilter(object):
 
     #Move particles acording to its motion
     def predict(self, dt):
-        """ Let particles wander randomly, even into walls """
-        for i in range(self.particle_number):
-            jitter_x = np.random.uniform(-self.forward_noise, self.forward_noise)
-            jitter_y = np.random.uniform(-self.forward_noise, self.forward_noise)
-
-            # Move the particle without checking if it's valid yet
-            self.x[i][0] += jitter_x
-            self.x[i][2] += jitter_y
-            
-            # Keep velocity components at 0 since the target is fixed
-            self.x[i][1] = 0
-            self.x[i][3] = 0
-        return
+        """ Vectorized random walk generation """
+        # Generate all jitter at once
+        jitter = np.random.uniform(-self.forward_noise, self.forward_noise, size=(self.particle_number, 2))
+        
+        # Update positions simultaneously
+        self.x[:, 0] += jitter[:, 0]
+        self.x[:, 2] += jitter[:, 1]
+        
+        # Target is fixed, zero out velocity components
+        self.x[:, 1] = 0
+        self.x[:, 3] = 0
         
 
     #To calculate Gaussian probability:
@@ -223,46 +224,29 @@ class ParticleFilter(object):
     #noise to prevent division by zero. Such checks are skipped here to keep the code 
     #as short and compact as possible.
     def measurement_prob(self, measurement, observer):
-            """ Calculate the measurement probability and log invalid particles """
-            
-            dist_all = []
-            equal = 0
-            
-            # --- LOGGING INITIALIZATION ---
-            invalid_count = 0 
-            # ------------------------------
-
-            for i in range(self.particle_number):
-                # THE KILL SWITCH: If the particle is in out of bounds, its probability is 0
-                if not self.is_valid(self.x[i][0], self.x[i][2]):
-                    self.w[i] = 1e-100 # Practically zero weight
-                    dist_all.append(0.0) 
-                    
-                    # --- INCREMENT LOG ---
-                    invalid_count += 1
-                    # --------------------
-                    continue
-
-                # Standard Gaussian evaluation for valid particles
-                dist = np.sqrt((self.x[i][0] - observer[0])**2 + (self.x[i][2] - observer[2])**2)
-                dist_old = np.sqrt((self.x[i][0] - self.observer_old[0])**2 + (self.x[i][2] - self.observer_old[2])**2)
-                inc_observer = np.sqrt((observer[0] - self.observer_old[0])**2 + (observer[2] - self.observer_old[2])**2)
-                
-                self.w[i] = self.gaussian(self, dist_old, dist, self.sense_noise, self.measurement_old, measurement, inc_observer)
-                
-                inc_mu = (self.dist_all_old[i]-dist) if i < len(self.dist_all_old) else 0
-                inc_z = (self.measurement_old-measurement)
-                if (inc_mu >= 0 and inc_z >= 0) or (inc_mu < 0 and inc_z < 0):
-                    equal +=1
-                dist_all.append(dist)
-            
-                
-            # save actual data as a old to be used on TDOA method
-            self.measurement_old = measurement
-            self.dist_all_old = np.array(dist_all)
-            self.w_old = self.w
-            self.observer_old = observer
-            return
+        """ Vectorized measurement probability calculation """
+        
+        # 1. Fetch the validity of ALL particles in one shot
+        # self.x[:, 0] gets all x coordinates; self.x[:, 2] gets all y coordinates
+        valid_mask = self.is_valid(self.x[:, 0], self.x[:, 2])
+        
+        # 2. Fully vectorized distances calculations for all particles
+        dist_all = np.sqrt((self.x[:, 0] - observer[0])**2 + (self.x[:, 2] - observer[2])**2)
+        dist_old = np.sqrt((self.x[:, 0] - self.observer_old[0])**2 + (self.x[:, 2] - self.observer_old[2])**2)
+        inc_observer = np.sqrt((observer[0] - self.observer_old[0])**2 + (observer[2] - self.observer_old[2])**2)
+        
+        # 3. Vectorized Gaussian calculation (assuming self.gaussian accepts array inputs)
+        self.w = self.gaussian(self, dist_old, dist_all, self.sense_noise, self.measurement_old, measurement, inc_observer)
+        
+        # 4. Apply KILL SWITCH: Instantly suppress weights of out-of-bounds/invalid particles
+        self.w[np.logical_not(valid_mask)] = 1e-100
+        
+        # Update histories (keeping compatibility with your TDOA approach)
+        self.measurement_old = measurement
+        self.dist_all_old = dist_all  # This is now naturally a numpy array
+        self.w_old = self.w.copy()
+        self.observer_old = observer
+        return
     
     def resampling(self,z):
         #After that we let these particles survive randomly, but the probability of survival 

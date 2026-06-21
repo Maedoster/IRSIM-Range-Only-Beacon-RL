@@ -106,7 +106,7 @@ class RobotNavEnv(gym.Env):
             self.target_tracker = Target(method='range', max_pf_range=15)
             self.pf = self.target_tracker.pf
             self.particle_plot = None
-            self.pf.set_validation_callback(self.is_valid_pos)  # Ensure PF never considers invalid positions
+            self.pf.set_validation_callback(self.is_valid_pos_vectorized)  # Ensure PF never considers invalid positions
         else:
             self.target_tracker = Target(method='range')
 
@@ -119,7 +119,7 @@ class RobotNavEnv(gym.Env):
 
         # 6. REWARD WEIGHTS (Cleaned duplicates)
         self.waypoint_reward = 1.0
-        self.goal_reward = 15.0
+        self.goal_reward = 50.0
         self.w_progress = 2.0 
         self.w_rotation = 0.05          #Before 0.02
         self.w_wiggle = 0.08            #Before 0.05
@@ -134,8 +134,8 @@ class RobotNavEnv(gym.Env):
         self.heading_margin = 0.2
         self.w_heading = 2.0
 
-        self.collision_penalty = -10
-        self.collision_goal_penalty = -5
+        self.collision_penalty = -50
+        self.collision_goal_penalty = -30
         self.truncation_penalty = -5
         self.step_penalty = -0.005 
 
@@ -593,6 +593,34 @@ class RobotNavEnv(gym.Env):
         self.inflated_grid = dilated_bool.astype(np.int8)
         self.occupancy_grid = raw_grid.astype(np.int8)
     
+    def is_valid_pos_vectorized(self, x, y):
+        """
+        Vectorized map validation that handles scalars, lists, or NumPy arrays.
+        Returns a boolean mask of the same shape as input x and y.
+        """
+        # Ensure inputs are numpy arrays for element-wise operations
+        x = np.asarray(x)
+        y = np.asarray(y)
+        
+        res = self.map_meta['resolution']
+        
+        # Vectorized conversion to grid indices
+        gx = (x / res).astype(int)
+        gy = (y / res).astype(int)
+        
+        # Generate a boolean mask for coordinates that fall within grid boundaries
+        valid_bounds = (gx >= 0) & (gx < self.inflated_grid.shape[1]) & \
+                    (gy >= 0) & (gy < self.inflated_grid.shape[0])
+        
+        # Initialize output array entirely as False (unsafe/out-of-bounds by default)
+        is_valid = np.zeros(x.shape, dtype=bool)
+        
+        # Only index the grid map where the coordinates are safely inside the boundaries
+        if np.any(valid_bounds):
+            # Invert the occupancy grid status (~ means 'not occupied')
+            is_valid[valid_bounds] = ~self.inflated_grid[gy[valid_bounds], gx[valid_bounds]]
+            
+        return is_valid
 
     def is_valid_pos(self, x, y):
         res = self.map_meta['resolution']
@@ -647,7 +675,12 @@ class RobotNavEnv(gym.Env):
                 heading_progress = np.clip(heading_progress, -0.5, 0.5)
             else:
                 heading_progress = 0.0
+
             self.prev_heading_error = current_heading_error
+
+            # 2c. Velocity Damping (Brake near the dock)
+            velocity_penalty = -2.0 * abs(action[0])
+            total_rew += velocity_penalty
 
             # Add both to total reward
             total_rew += (dist_progress * self.w_progress) + (heading_progress * self.w_heading)
@@ -859,7 +892,7 @@ class RobotNavEnv(gym.Env):
 
             # 3. Randomize Robot Position
             rx, ry = self._get_random_valid_pos()
-            
+
             # CATCH 1: Robot spawn failed
             if rx is None:
                 logging.warning(f"Attempt {attempt+1}: Map {selected_yaml} rejected (Robot spawn). Skipping...")
@@ -874,7 +907,7 @@ class RobotNavEnv(gym.Env):
             
             for _ in range(max_attempts):
                 gx, gy = self._get_random_valid_pos()
-                
+
                 # CATCH 2: Goal spawn failed completely
                 if gx is None:
                     goal_spawn_failed = True
@@ -902,6 +935,7 @@ class RobotNavEnv(gym.Env):
             break # Break out of the map skipping loop
             
         else:
+            print("Runtime error: Failed to spawn after maximum attempts.", flush=True)
             # This executes ONLY if the for-loop exhausts all 10 attempts without breaking
             raise RuntimeError(f"Failed to spawn after {max_skips} consecutive maps. Check your dataset, scale, or margin parameters.")
 
@@ -978,7 +1012,6 @@ class RobotNavEnv(gym.Env):
         # Move the robot
         ctrl_action = np.array([[action[0]], [action[1]]])
         self.sim.step(ctrl_action)
-        
         # --- ESTIMATION ---
         robot_state = self.sim.get_robot_state()
         robot_pos_pf = np.array([robot_state[0,0], 0.0, robot_state[1,0], 0.0])
@@ -988,7 +1021,6 @@ class RobotNavEnv(gym.Env):
         if self.pf_active:
             self.target_tracker.updatePF(dt=0.1, new_range=True, z=dist_z, myobserver=robot_pos_pf)
             self.estimated_goal = np.array([self.target_tracker.pfxs[0], self.target_tracker.pfxs[2]])
-            
             # ==========================================
             # GATING LOGIC & STATE MACHINE (PF MODE)
             # ==========================================
@@ -1009,7 +1041,6 @@ class RobotNavEnv(gym.Env):
                             if len(path) > 1:
                                 # --- SUCCESS: Path found! No cooldown needed ---
                                 sparse_path = self.prune_path_to_sparse(path)
-                                
                                 pruned_path = []
                                 for wp in sparse_path:
                                     dist_to_goal = np.linalg.norm(np.array(wp) - self.estimated_goal)
