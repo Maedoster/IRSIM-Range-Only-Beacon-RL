@@ -60,7 +60,7 @@ SAVE_EVAL_MAPS = False
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
-RESUME_FOLDER = r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_16023\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
+RESUME_FOLDER = r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_20360\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
 CHECKPOINT_NAME = "last_checkpoint"  # e.g., "best_model" or "SAC_recovery_380000_steps"
 
 
@@ -202,13 +202,15 @@ class TrainingProgressCallback(BaseCallback):
         self.episode_successes = []
         self.episode_collisions = []
         self.episode_truncations = []
-        self.episode_crashes_goal = []  # New list to track goal crashes
+        self.episode_crashes_goal = []  
+        self.episode_lengths = []       # Added to track step sizes
         
         # Memory tracking flags and baselines
         self.saved_5000_stats = False
         self.baseline_ram_mb = None
         self.baseline_vram_mb = None
-        self.has_recorded_5000 = False  # New flag to ensure we only record once
+        self.has_recorded_5000 = False  
+        self.current_lengths = None     # Array tracking live steps per environment
 
         # --- Restore from JSON if resuming ---
         if self.experiment_folder:
@@ -221,7 +223,7 @@ class TrainingProgressCallback(BaseCallback):
                     
                     if "periodic_tracking" in meta_data and "first_5000_steps" in meta_data["periodic_tracking"]:
                         self.saved_5000_stats = True
-                        self.has_recorded_5000 = True  # Mark as already recorded
+                        self.has_recorded_5000 = True  
                         self.baseline_ram_mb = meta_data["periodic_tracking"]["first_5000_steps"].get("ram_mb")
                         self.baseline_vram_mb = meta_data["periodic_tracking"]["first_5000_steps"].get("vram_mb")
                         if self.verbose > 0:
@@ -229,7 +231,9 @@ class TrainingProgressCallback(BaseCallback):
                 except Exception as e:
                     print(f"[Warning] Could not load baselines from metadata: {e}")
 
-    def _update_periodic_metadata(self, key_name: str, ram_mb: float, vram_mb: float, step: int, success_rate: float, collision_rate: float, truncated_rate: float, goal_crash_rate: float):
+    def _update_periodic_metadata(self, key_name: str, ram_mb: float, vram_mb: float, step: int, 
+                                 success_rate: float, collision_rate: float, truncated_rate: float, 
+                                 goal_crash_rate: float, avg_steps: float, num_episodes: int):
         """Helper to inject memory AND performance stats into the metadata JSON safely."""
         if not self.experiment_folder:
             return
@@ -265,6 +269,8 @@ class TrainingProgressCallback(BaseCallback):
 
                 entry_data = {
                     "step": step,
+                    "num_episodes": num_episodes,
+                    "avg_episode_length": round(avg_steps, 2),
                     "success_rate(%)": round(success_rate, 2),
                     "collision_rate(%)": round(collision_rate, 2),
                     "collision_goal_rate(%)": round(goal_crash_rate, 2),
@@ -283,7 +289,6 @@ class TrainingProgressCallback(BaseCallback):
                     # Always update latest and history
                     meta_data["periodic_tracking"]["latest"] = entry_data
 
-
                 # Write atomically with temp file
                 tmp_meta = meta_default_path + ".tmp"
                 with open(tmp_meta, 'w') as f:
@@ -292,11 +297,10 @@ class TrainingProgressCallback(BaseCallback):
                 
                 # Remove lock file
                 os.remove(lock_file)
-                break  # Success, exit retry loop
+                break  
                 
             except Exception as e:
                 print(f"[Warning] Attempt {attempt+1} failed to write periodic stats to metadata: {e}")
-                # Clean up lock file if it exists and we created it
                 if os.path.exists(lock_file):
                     try:
                         os.remove(lock_file)
@@ -314,6 +318,12 @@ class TrainingProgressCallback(BaseCallback):
         infos = self.locals.get("infos")
         dones = self.locals.get("dones")
 
+        # Initialize and increment tracking for vector environments
+        if dones is not None:
+            if self.current_lengths is None:
+                self.current_lengths = np.zeros(len(dones))
+            self.current_lengths += 1
+
         if infos is not None and dones is not None:
             for i, done in enumerate(dones):
                 if done: 
@@ -327,6 +337,10 @@ class TrainingProgressCallback(BaseCallback):
                     is_truncated = info.get("TimeLimit.truncated", False) or actual_info.get("truncated", False)
                     self.episode_truncations.append(float(is_truncated))
                     self.episode_crashes_goal.append(float(actual_info.get("goal_crash", False)))
+                    
+                    if self.current_lengths is not None:
+                        self.episode_lengths.append(float(self.current_lengths[i]))
+                        self.current_lengths[i] = 0.0
 
         if self.n_calls % self.check_freq == 0:
             total_eps = len(self.episode_successes)
@@ -335,8 +349,10 @@ class TrainingProgressCallback(BaseCallback):
                 collision_rate = (sum(self.episode_collisions) / total_eps) * 100
                 truncated_rate = (sum(self.episode_truncations) / total_eps) * 100
                 goal_crash_rate = (sum(self.episode_crashes_goal) / total_eps) * 100
+                avg_steps = sum(self.episode_lengths) / total_eps
             else:
                 success_rate = collision_rate = truncated_rate = goal_crash_rate = 0.0
+                avg_steps = 0.0
 
             elapsed_time = time.time() - self.start_time
             session_steps_done = self.num_timesteps - self.start_steps
@@ -363,17 +379,17 @@ class TrainingProgressCallback(BaseCallback):
                 vram_allocated_mb = torch.cuda.memory_allocated() / (1024 ** 2)
 
             # --- FIXED: Only record 5000 stats ONCE and never again ---
-            if not self.has_recorded_5000 and 4900 <= steps_done <= 5100:  # Narrow window
+            if not self.has_recorded_5000 and 4900 <= steps_done <= 5100:  
                 self.baseline_ram_mb = ram_mb
                 self.baseline_vram_mb = vram_allocated_mb
-                self._update_periodic_metadata("first_5000_steps", ram_mb, vram_allocated_mb, steps_done, success_rate, collision_rate, truncated_rate, goal_crash_rate)
-                self.has_recorded_5000 = True  # Mark as recorded, will never happen again
+                self._update_periodic_metadata("first_5000_steps", ram_mb, vram_allocated_mb, steps_done, success_rate, collision_rate, truncated_rate, goal_crash_rate, avg_steps, total_eps)
+                self.has_recorded_5000 = True  
                 self.saved_5000_stats = True
                 if self.verbose > 0:
                     print(f"\n[Progress] Recorded baseline stats at {steps_done} steps")
                 
-            # Always update latest stats (this overwrites only the 'latest' entry, not 'first_5000_steps')
-            self._update_periodic_metadata("latest", ram_mb, vram_allocated_mb, steps_done, success_rate, collision_rate, truncated_rate, goal_crash_rate)
+            # Always update latest stats
+            self._update_periodic_metadata("latest", ram_mb, vram_allocated_mb, steps_done, success_rate, collision_rate, truncated_rate, goal_crash_rate, avg_steps, total_eps)
 
             ram_delta_str = ""
             vram_delta_str = ""
@@ -391,6 +407,7 @@ class TrainingProgressCallback(BaseCallback):
 
             print(f"\n>>> [PROGRESS] Step: {steps_done}/{total_steps}")
             print(f">>> Rates: Success {success_rate:.1f}% | Collisions {collision_rate:.1f}% | Goal Crashes {goal_crash_rate:.1f}% | Truncated {truncated_rate:.1f}% ({total_eps} eps)")
+            print(f">>> Lengths: Avg Steps/Ep: {avg_steps:.1f}")
             print(f">>> Speed: {steps_per_sec:.1f} steps/s | ETA: {eta_str}")
             print(f">>> [MEMORY OVERHEAD] System RAM: {ram_mb:.1f} MB{ram_delta_str} | CUDA VRAM -> {vram_str}")
             
@@ -398,6 +415,7 @@ class TrainingProgressCallback(BaseCallback):
             self.logger.record("metrics/collision_rate_period", collision_rate)
             self.logger.record("metrics/goal_crash_rate_period", goal_crash_rate)
             self.logger.record("metrics/truncated_rate_period", truncated_rate)
+            self.logger.record("metrics/avg_episode_length_period", avg_steps)
             self.logger.record("time/steps_per_second", steps_per_sec)
             self.logger.record("system/ram_usage_mb", ram_mb)
 
@@ -405,7 +423,9 @@ class TrainingProgressCallback(BaseCallback):
             self.episode_collisions = []
             self.episode_truncations = []
             self.episode_crashes_goal = []
+            self.episode_lengths = []
         return True
+
 
 class EvalAndSaveBestSuccessCallback(BaseCallback):
     def __init__(self, eval_env, best_model_save_path=None, log_path=None, 
@@ -452,19 +472,27 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
             episode_collisions = []
             episode_truncations = []
             episode_crashes_goal = []
+            episode_lengths = []      # Track eval episode step distributions
+            
             obs = self.eval_env.reset()
             current_rewards = np.zeros(self.eval_env.num_envs)
+            current_lengths = np.zeros(self.eval_env.num_envs) 
             episodes_completed = 0
             
             while episodes_completed < self.n_eval_episodes:
                 actions, _ = self.model.predict(obs, deterministic=self.deterministic)
                 obs, rewards, dones, infos = self.eval_env.step(actions)
                 current_rewards += rewards
+                current_lengths += 1
                 
                 for i, done in enumerate(dones):
                     if done:
                         episode_rewards.append(current_rewards[i])
                         current_rewards[i] = 0.0
+                        
+                        episode_lengths.append(float(current_lengths[i]))
+                        current_lengths[i] = 0.0
+                        
                         episodes_completed += 1
                         
                         info = infos[i]
@@ -480,6 +508,7 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                             
             mean_reward = np.mean(episode_rewards)
             std_reward = np.std(episode_rewards)
+            avg_steps_eval = np.mean(episode_lengths) if episode_lengths else 0.0
             
             if len(episode_successes) > 0:
                 success_rate = (sum(episode_successes) / len(episode_successes)) * 100.0 if episode_successes else 0.0
@@ -493,12 +522,14 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                 print(f"[EVAL] Evaluated {episodes_completed} episodes.")
                 print(f"[EVAL] Reward: {mean_reward:.2f} +/- {std_reward:.2f}")
                 print(f"[EVAL] Rates -> Success: {success_rate:.1f}% | Collisions: {collision_rate:.1f}% | Goal Crashes: {goal_crash_rate:.1f}% | Truncated: {truncated_rate:.1f}%")
+                print(f"[EVAL] Avg Steps/Ep: {avg_steps_eval:.1f}")
                 
             self.logger.record("eval/mean_reward", mean_reward)
             self.logger.record("eval/success_rate", success_rate)
             self.logger.record("eval/collision_rate", collision_rate)
             self.logger.record("eval/goal_crash_rate", goal_crash_rate)
             self.logger.record("eval/truncated_rate", truncated_rate)
+            self.logger.record("eval/avg_episode_length", avg_steps_eval)
             
             is_new_best = False
             
@@ -512,10 +543,10 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                     if self.verbose > 0:
                         print(f"[EVAL] *** SAME SUCCESS RATE ({success_rate:.2f}%), BUT BETTER REWARD! ({self.best_mean_reward:.2f} -> {mean_reward:.2f}) ***")
                 elif mean_reward == self.best_mean_reward:
-                    if self.collision_rate < collision_rate:
+                    if hasattr(self, 'collision_rate') and self.collision_rate < collision_rate:
                         is_new_best = True
                         if self.verbose > 0:
-                            print(f"[EVAL] *** SAME SUCCESS RATE AND REWARD, BUT BETTER COLLISION RATE! ({collision_rate:.2f}% -> {self.collision_rate:.2f}%) ***")
+                            print(f"[EVAL] *** SAME SUCCESS RATE AND REWARD, BUT BETTER COLLISION RATE! ***")
                         
             if is_new_best:
                 self.best_success_rate = success_rate
@@ -532,8 +563,7 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                         vec_env.save(stats_path)
 
             # ==========================================================
-            # FIX: Moved metadata saving OUTSIDE the `if is_new_best` block 
-            # so that EVERY evaluation is logged to history.
+            # Saved outside the configuration check block so history logs everything
             # ==========================================================
             if self.experiment_folder:
                 meta_default_path = os.path.join(self.experiment_folder, "metadata.json")
@@ -546,8 +576,7 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                         print(f"[Warning] Metadata read failed. Skipping best model write to prevent data wipe: {e}")
                         return True 
                 
-                
-                # 2. Update the best_model_stats specifically if it broke the record
+                # Update the best_model_stats key values if it achieved a record
                 if is_new_best:
                     if "best_model_stats" not in meta_data:
                         meta_data["best_model_stats"] = {}
@@ -558,6 +587,8 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                     meta_data["best_model_stats"]["associated_truncated_rate(%)"] = round(truncated_rate, 2)
                     meta_data["best_model_stats"]["best_mean_reward"] = float(self.best_mean_reward)
                     meta_data["best_model_stats"]["timesteps_achieved"] = self.num_timesteps
+                    meta_data["best_model_stats"]["num_episodes"] = episodes_completed
+                    meta_data["best_model_stats"]["avg_episode_length"] = round(float(avg_steps_eval), 2)
                 
                 try:
                     tmp_meta = meta_default_path + ".tmp"

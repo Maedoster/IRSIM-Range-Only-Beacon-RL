@@ -55,11 +55,11 @@ def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
 # ==========================================
 def main():
     parser = argparse.ArgumentParser(description="Parallel RL Testing Script")
-    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_16023", help="Name of the experiment folder inside 'models/'")
+    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_20360_86%", help="Name of the experiment folder inside 'models/'")
     parser.add_argument('--model-name', type=str, default="best_model", help="Name of the saved model zip/pkl (without extension)")
     parser.add_argument('--num-episodes', type=int, default=500, help="Total number of episodes to test")
-    parser.add_argument('--num-envs', type=int, default=4, help="Number of parallel environments to run")
-    parser.add_argument('--seed', type=int, default=12345, help="Base random seed for reproducibility")
+    parser.add_argument('--num-envs', type=int, default=8, help="Number of parallel environments to run")
+    parser.add_argument('--seed', type=int, default=1, help="Base random seed for reproducibility")
     parser.add_argument('--render', action='store_true', help="Enable rendering (will only render worker 0 to prevent crashes)")
     args = parser.parse_args()
 
@@ -141,11 +141,11 @@ def main():
                     if is_collision_goal:
                         collision_goal_episodes += 1
                     # 'episode' dict is populated by SB3 Monitor/VecEnv when an episode finishes
-                    if 'episode' in info:
-                        ep_reward = info['reward']
-                        ep_length = info['steps']
-                        episode_rewards.append(ep_reward)
-                        episode_steps.append(ep_length)
+                    
+                    ep_reward = info['reward']
+                    ep_length = info['steps']
+                    episode_rewards.append(ep_reward)
+                    episode_steps.append(ep_length)
                     
                     result_str = "SUCCESS" if is_success else "COLLISION_GOAL" if is_collision_goal else "COLLISION" if is_collision else "TIMEOUT" if is_timeout else "UNKNOWN"
                     target_error = info.get('target_error', 0.0)

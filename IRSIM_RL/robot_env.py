@@ -144,7 +144,7 @@ class RobotNavEnv(gym.Env):
         self.current_path = []
         self.waypoint_index = 0
         self.nav_goal = np.array([0.0, 0.0]) 
-        self.state_dim = 51
+        self.state_dim = 60
         self.max_steps = 1500  
         self.astar_cooldown = 60  
         
@@ -779,7 +779,7 @@ class RobotNavEnv(gym.Env):
         return latest_scan, distance_to_ghost, cos_val, sin_val, collision, arrive, diff_rad, action, real_goal, true_v, true_w
                 
     def prepare_state(self, data):
-        # Unpack the 11 items now being returned
+        # Unpack the 11 items returned from the simulation step
         latest_scan, distance, cos, sin, collision, arrive, diff_rad, action, real_goal, true_v, true_w = data
         
         scan_arr = np.array(latest_scan)
@@ -793,25 +793,23 @@ class RobotNavEnv(gym.Env):
         
         clipped_dist = np.clip(distance, 0, self.set_max_range)
         
-        # Add true physical metrics alongside your control inputs
         extra_features = [
             clipped_dist / self.set_max_range, 
             cos, 
             sin, 
             action[0] / 0.6,    # Intended linear
             action[1] / 1.2,    # Intended angular
-            true_v / 0.6,       # REAL physical linear velocity (Normalized [0, 1])
-            true_w / 1.2,       # REAL physical angular velocity (Normalized [-1, 1])
+            true_v / 0.6,       # Real linear velocity normalized [0, 1]
+            true_w / 1.2,       # Real angular velocity normalized [-1, 1]
             *state_encoded
         ]
 
-        num_extra = len(extra_features)
-        max_bins = self.observation_space.shape[0] - num_extra
-        
-        bins = np.array_split(scan_arr, max_bins)
-        min_values = 1.0 - (np.array([np.min(b) for b in bins]) / self.set_max_range)
+        # PURE STRIDED SLICING: Extract every 2nd ray cleanly
+        # This keeps the ray distributions perfectly symmetric across the robot's chassis
+        symmetric_rays = scan_arr[::2] 
+        lidar_features = 1.0 - (symmetric_rays / self.set_max_range)
 
-        full_state = np.concatenate([min_values, np.array(extra_features, dtype=np.float32)])
+        full_state = np.concatenate([lidar_features, np.array(extra_features, dtype=np.float32)])
         terminal = collision or arrive
         
         return full_state, terminal
