@@ -47,10 +47,10 @@ INITIAL_SEED = np.random.randint(0, 100000) #Or a specific one for reproducibili
 #INITIAL_SEED = 12345
 
 # --- Training Parameters ---
-NUM_ENVS = 8
+NUM_ENVS = 14
 
 USE_DUMMY_EVAL = False  # Set to True to use DummyVecEnv for evaluation (single environment, no parallelism)
-NUM_EVAL_ENVS = 8  # Only relevant if USE_DUMMY_EVAL is False. Number of parallel environments for evaluation.
+NUM_EVAL_ENVS = 14  # Only relevant if USE_DUMMY_EVAL is False. Number of parallel environments for evaluation.
 
 TOTAL_TIMESTEPS = 3000000
 EVAL_EPISODES = 500
