@@ -52,18 +52,18 @@ NUM_ENVS = 8
 USE_DUMMY_EVAL = False  # Set to True to use DummyVecEnv for evaluation (single environment, no parallelism)
 NUM_EVAL_ENVS = 8  # Only relevant if USE_DUMMY_EVAL is False. Number of parallel environments for evaluation.
 
-TOTAL_TIMESTEPS = 10000
-EVAL_EPISODES = 300
+TOTAL_TIMESTEPS = 3000000
+EVAL_EPISODES = 500
 
 SAVE_FREQ = 20000  # Save every N environment steps (adjusted by number of envs in callbacks)
-EVAL_FREQ = 50000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
+EVAL_FREQ = 20000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
 
 SAVE_EVAL_MAPS = False
 
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
-RESUME_FOLDER = None  # r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_20360\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
+RESUME_FOLDER = None #r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_20360\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
 CHECKPOINT_NAME = "last_checkpoint"  # e.g., "best_model" or "SAC_recovery_380000_steps"
 
 
