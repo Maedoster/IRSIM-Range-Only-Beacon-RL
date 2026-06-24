@@ -59,13 +59,10 @@ def main():
     parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_20360_86%", help="Name of the experiment folder inside 'models/'")
     parser.add_argument('--model-name', type=str, default="best_model", help="Name of the saved model zip/pkl (without extension)")
     parser.add_argument('--num-episodes', type=int, default=500, help="Total number of episodes to test")
-    parser.add_argument('--num-envs', type=int, default=8, help="Number of parallel environments to run")
+    parser.add_argument('--num-envs', type=int, default=4, help="Number of parallel environments to run")
     parser.add_argument('--seed', type=int, default=1, help="Base random seed for reproducibility")
     parser.add_argument('--render', action='store_true', help="Enable rendering (will only render worker 0 to prevent crashes)")
     args = parser.parse_args()
-
-    NUM_EPISODES = args.num_episodes
-    INITIAL_SEED = args.seed
 
     experiment_dir = os.path.join(MODELS_DIR, args.experiment_dir)
     model_path = os.path.join(experiment_dir, args.model_name, f"{args.model_name}.zip")

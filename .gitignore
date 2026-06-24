@@ -3,6 +3,7 @@ venv/
 .venv/
 env/
 __pycache__/
+.pixi/
 
 # RL Models and Logs
 logs/
@@ -32,4 +33,6 @@ IRSimDataset_Sorted/
 # IDE and OS files
 .vscode/
 .idea/
-.DS_Store
+.DS_Store# pixi environments
+.pixi/*
+!.pixi/config.toml

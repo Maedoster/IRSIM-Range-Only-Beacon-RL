@@ -16,6 +16,8 @@ import argparse
 import time
 import traceback
 
+
+
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -50,7 +52,7 @@ NUM_ENVS = 8
 USE_DUMMY_EVAL = False  # Set to True to use DummyVecEnv for evaluation (single environment, no parallelism)
 NUM_EVAL_ENVS = 8  # Only relevant if USE_DUMMY_EVAL is False. Number of parallel environments for evaluation.
 
-TOTAL_TIMESTEPS = 3000000
+TOTAL_TIMESTEPS = 10000
 EVAL_EPISODES = 300
 
 SAVE_FREQ = 20000  # Save every N environment steps (adjusted by number of envs in callbacks)
@@ -89,7 +91,7 @@ def load_yaml(path):
     with open(path) as f:
         return yaml.safe_load(f)  
 
-def make_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1):
+def make_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1, num_eval_episodes=EVAL_EPISODES):
     def _init():
         env = RobotNavEnv(
             render=False, 
@@ -99,7 +101,7 @@ def make_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1):
             is_eval=False,            # <--- Explicitly set to False for training
             worker_id=rank,           # <--- Pass rank
             num_workers=num_workers,   # <--- Pass total workers
-            num_eval_episodes= EVAL_EPISODES       # <--- Not used in training, but set to 0 for clarity
+            num_eval_episodes= num_eval_episodes       # <--- Not used in training, but set to 0 for clarity
         )
         # Wrap the environment in the shield with logging enabled
         env = ExceptionShieldWrapper(env, log_file=log_file, rank=rank)
@@ -109,7 +111,7 @@ def make_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1):
 # ==========================================
 # EVALUATION SETUP
 # ==========================================
-def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1):
+def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1, num_eval_episodes=EVAL_EPISODES, save_eval_maps=SAVE_EVAL_MAPS, is_serial_eval=USE_DUMMY_EVAL):
     def _init():
         raw_env = RobotNavEnv(
             render=False, 
@@ -117,11 +119,11 @@ def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_worker
             pf_active=pf_active,       # Fixed: was PF_ACTIVE
             seed=seed,
             is_eval=True,   
-            is_serial_eval=USE_DUMMY_EVAL,           
+            is_serial_eval= is_serial_eval,           
             worker_id=rank,            
             num_workers=num_workers,    # Fixed: was NUM_EVAL_ENVS
-            num_eval_episodes=EVAL_EPISODES,  
-            save_eval_maps =SAVE_EVAL_MAPS
+            num_eval_episodes=num_eval_episodes,  
+            save_eval_maps =save_eval_maps
             
         )
                     
@@ -615,7 +617,7 @@ class CheckpointWithVecNormalizeCallback(CheckpointCallback):
             last_buffer_path = os.path.join(self.save_path, "last_replay_buffer.pkl")
             last_model_path = os.path.join(self.save_path, "last_checkpoint.zip") # New
 
-            history_stats_path = os.path.join(self.save_path, f"{SELECTED_ALGORITHM}_recovery_{self.num_timesteps}_steps.pkl")
+            history_stats_path = os.path.join(self.save_path, f"{self.name_prefix}_{self.num_timesteps}_steps.pkl")
             
             # --- Save VecNormalize (The "Last" version) ---
             vec_env = self.model.get_vec_normalize_env()
@@ -682,10 +684,28 @@ class TensorboardCustomVarsCallback(BaseCallback):
 def main():
     global eval_env
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num-envs', type=int, default=NUM_ENVS) 
-    parser.add_argument('--total-timesteps', type=int, default=TOTAL_TIMESTEPS) 
-    parser.add_argument('--resume-folder', type=str, default=RESUME_FOLDER)
-    parser.add_argument('--checkpoint-name', type=str, default=CHECKPOINT_NAME)
+
+    # General
+    parser.add_argument("--algorithm", choices=["DDPG", "TD3", "PPO", "SAC"], default=SELECTED_ALGORITHM)
+    parser.add_argument("--pf-active", action=argparse.BooleanOptionalAction, default=PF_ACTIVE)
+    parser.add_argument("--seed", type=int, default=INITIAL_SEED)
+
+    # Training
+    parser.add_argument("--num-envs", type=int, default=NUM_ENVS)
+    parser.add_argument("--total-timesteps", type=int, default=TOTAL_TIMESTEPS)
+    parser.add_argument("--eval-episodes", type=int, default=EVAL_EPISODES)
+    parser.add_argument("--save-freq", type=int, default=SAVE_FREQ)
+    parser.add_argument("--eval-freq", type=int, default=EVAL_FREQ)
+
+    # Evaluation
+    parser.add_argument("--use-dummy-eval", action=argparse.BooleanOptionalAction, default=USE_DUMMY_EVAL)
+    parser.add_argument("--num-eval-envs", type=int, default=NUM_EVAL_ENVS)
+    parser.add_argument("--save-eval-maps", action=argparse.BooleanOptionalAction, default=SAVE_EVAL_MAPS)
+
+    # Resume
+    parser.add_argument("--resume-folder", default=RESUME_FOLDER)
+    parser.add_argument("--checkpoint-name", default=CHECKPOINT_NAME)
+
     args = parser.parse_args()
 
     map_filename = "0004d52d1aeeb8ae6de39d6bd993e992.yaml" 
@@ -731,15 +751,15 @@ def main():
                 old_meta = json.load(f)
                 # Extract the seed safely from your JSON structure
                 initial_seed = int(old_meta["experiment_info"]["initial_seed"])
-                model_suffix = f"{SELECTED_ALGORITHM}_{PF_ACTIVE}_{initial_seed}"
+                model_suffix = f"{args.algorithm}_{args.pf_active}_{initial_seed}"
             print(f"[Resume] Found original seed in metadata! Lock-in seed: {initial_seed}")
         else:
-            initial_seed = INITIAL_SEED  # Fallback to global constant if metadata is missing
+            initial_seed = args.seed  # Fallback to global constant if metadata is missing
             print(f"[Resume] WARNING: metadata.json not found in {experiment_folder}. Using current INITIAL_SEED.")
         
     else:
-        initial_seed = INITIAL_SEED  # Use the global constant for fresh runs
-        model_suffix = f"{SELECTED_ALGORITHM}_{PF_ACTIVE}_{initial_seed}"
+        initial_seed = args.seed  # Use the global constant for fresh runs
+        model_suffix = f"{args.algorithm}_{args.pf_active}_{initial_seed}"
         experiment_folder = os.path.join(MODELS_DIR, f"run_{model_suffix}")
         os.makedirs(experiment_folder, exist_ok=True)
 
@@ -766,16 +786,16 @@ def main():
             env_crash_log = os.path.join(experiment_folder, "robot_env_crashes.txt")
 
            
-            print(f"Initializing {NUM_EVAL_ENVS} parallel evaluation environments...")
+            print(f"Initializing {args.num_envs} parallel evaluation environments...")
             # Use a list comprehension to generate the environment initializers
 
             if USE_DUMMY_EVAL:
                 print(">>> Using DummyVecEnv for Evaluation (Sequential on Main Thread)")
-                eval_env = DummyVecEnv([make_eval_env(map_path, PF_ACTIVE, 0, eval_seed, env_crash_log, NUM_EVAL_ENVS)])
+                eval_env = DummyVecEnv([make_eval_env(map_path, args.pf_active, 0, eval_seed, env_crash_log, args.num_envs)])
             else:
                 print(">>> Using SubprocVecEnv for Evaluation (Parallel Processes)")
-                eval_env = SubprocVecEnv([make_eval_env(map_path, PF_ACTIVE, i, eval_seed, env_crash_log, NUM_EVAL_ENVS) 
-                for i in range(NUM_EVAL_ENVS)])
+                eval_env = SubprocVecEnv([make_eval_env(map_path, args.pf_active, i, eval_seed, env_crash_log, args.num_envs, args.save_eval_maps, args.use_dummy_eval) 
+                for i in range(args.num_envs)])
             
             set_random_seed(initial_seed)
 
@@ -793,22 +813,22 @@ def main():
                 best_model_save_path=best_model_path,
                 log_path=os.path.join(experiment_folder, "logs"),
                 eval_freq=max(EVAL_FREQ // args.num_envs, 1), 
-                n_eval_episodes=EVAL_EPISODES,
+                n_eval_episodes=args.eval_episodes,
                 deterministic=True,
                 verbose=1,
                 experiment_folder=experiment_folder
             )
             
             checkpoint_callback = CheckpointWithVecNormalizeCallback(
-                save_freq=max(SAVE_FREQ // args.num_envs, 1), 
+                save_freq=max(args.save_freq // args.num_envs, 1), 
                 save_path=os.path.join(experiment_folder, "crash_checkpoints"),
-                name_prefix=f"{SELECTED_ALGORITHM}_recovery"
+                name_prefix=f"{args.algorithm}_recovery"
             )
 
             callback_list = CallbackList([
                 eval_callback, 
                 checkpoint_callback, 
-                TrainingSchedulerCallback(SELECTED_ALGORITHM), 
+                TrainingSchedulerCallback(args.algorithm), 
                 TensorboardCustomVarsCallback(),
                 TrainingProgressCallback(check_freq=max(5000 // args.num_envs, 1), experiment_folder=experiment_folder),
             ])
@@ -819,7 +839,7 @@ def main():
             timesteps_completed = 0
             if current_resume_folder is not None:
                 algo_classes = {"TD3": TD3, "PPO": PPO, "DDPG": DDPG, "SAC": SAC}
-                AlgoClass = algo_classes.get(SELECTED_ALGORITHM)
+                AlgoClass = algo_classes.get(args.algorithm)
                 if recovery_count == -1:
                     recovery_count = 0
                 # Locate the exact zip file
@@ -834,16 +854,20 @@ def main():
                 del temp_model  # Delete to immediately free up system RAM/VRAM
             
             # The exact, deterministic offset math
-            current_seed = initial_seed + timesteps_completed + recovery_count
+
+            current_seed = initial_seed + timesteps_completed
+
+            if(recovery_count > -1):
+                current_seed = initial_seed + timesteps_completed + recovery_count
             
             print(f"\n[RNG] Base Seed: {initial_seed} | Timesteps Offset: {timesteps_completed} | Recovery Offset: {recovery_count}")
             print(f"[RNG] Final injected seed for this run: {current_seed}\n")
             
             # TRAINING ENV
-            print(f"Initializing {args.num_envs} environments for {SELECTED_ALGORITHM} (PF: {PF_ACTIVE})...")
+            print(f"Initializing {args.num_envs} environments for {args.algorithm} (PF: {args.pf_active})...")
             
             # ---> FIX applied here: Pass current_seed to the environment!
-            env = SubprocVecEnv([make_env(map_path, PF_ACTIVE, i, current_seed, env_crash_log, args.num_envs) for i in range(args.num_envs)])
+            env = SubprocVecEnv([make_env(map_path, args.pf_active, i, current_seed, env_crash_log, args.num_envs) for i in range(args.num_envs)])
             
             if current_resume_folder:
                 stats_path = os.path.join(experiment_folder, f"{current_checkpoint_name}.pkl")
@@ -860,7 +884,7 @@ def main():
             policy_kwargs = dict(net_arch=dict(pi=[256, 256, 256], qf=[256, 256, 256]))
             
             algo_classes = {"TD3": TD3, "PPO": PPO, "DDPG": DDPG, "SAC": SAC}
-            AlgoClass = algo_classes.get(SELECTED_ALGORITHM)
+            AlgoClass = algo_classes.get(args.algorithm)
 
             if current_resume_folder:
                 model_path = os.path.join(experiment_folder, current_checkpoint_name)
@@ -868,7 +892,7 @@ def main():
                     model_path = os.path.join(experiment_folder, "crash_checkpoints", args.checkpoint_name)
                 model = AlgoClass.load(model_path, env=env, device="cuda" if torch.cuda.is_available() else "cpu")
 
-                if SELECTED_ALGORITHM in ["SAC", "TD3", "DDPG"]:
+                if args.algorithm in ["SAC", "TD3", "DDPG"]:
                     buffer_path = os.path.join(experiment_folder, "last_replay_buffer.pkl")
                     if not os.path.exists(buffer_path):
                         buffer_path = os.path.join(experiment_folder, "crash_checkpoints", "last_replay_buffer.pkl")
@@ -881,27 +905,27 @@ def main():
 
             else:
                 # FRESH MODEL
-                if SELECTED_ALGORITHM == "TD3":
+                if args.algorithm == "TD3":
                     model = TD3("MlpPolicy", env, verbose=1, seed=initial_seed, device="cuda", learning_rate=3e-4, buffer_size=300000,
                                 batch_size=256, gamma=0.99, tau=0.01, train_freq=1, gradient_steps=1,
                                 learning_starts=10000, policy_delay=2, action_noise=action_noise,
                                 policy_kwargs=policy_kwargs, tensorboard_log="./logs/")
-                elif SELECTED_ALGORITHM == "PPO":
+                elif args.algorithm == "PPO":
                     model = PPO("MlpPolicy", env, verbose=1, seed=initial_seed, device="cpu", learning_rate=3e-4, n_steps=2048,
                                 batch_size=256, n_epochs=10, ent_coef=0.01, clip_range=0.2, gae_lambda=0.95,
                                 policy_kwargs=policy_kwargs, tensorboard_log="./logs/")
-                elif SELECTED_ALGORITHM == "DDPG":
+                elif args.algorithm == "DDPG":
                     model = DDPG("MlpPolicy", env, verbose=1, seed=initial_seed, device="cuda", learning_rate=3e-4, buffer_size=300000,
                                 batch_size=256, gamma=0.99, tau=0.01, train_freq=1, gradient_steps=1,
                                 learning_starts=10000, action_noise=action_noise, policy_kwargs=policy_kwargs,
                                 tensorboard_log="./logs/")
-                elif SELECTED_ALGORITHM == "SAC":
+                elif args.algorithm == "SAC":
                     model = SAC("MlpPolicy", env, verbose=1, seed=initial_seed, device="cuda", learning_rate=3e-4, buffer_size=300000,
                                 batch_size=256, gamma=0.99, tau=0.01, train_freq=1, gradient_steps=1,
                                 learning_starts=10000, ent_coef="auto", target_entropy="auto",
                                 policy_kwargs=policy_kwargs, tensorboard_log="./logs/")
                 else:
-                    print(f"Unsupported algorithm: {SELECTED_ALGORITHM}")
+                    print(f"Unsupported algorithm: {args.algorithm}")
                     return
             
             # ==========================================
@@ -1017,8 +1041,8 @@ def main():
 
             metadata = {
                 "experiment_info": {
-                    "algorithm": SELECTED_ALGORITHM,
-                    "pf_active": PF_ACTIVE,
+                    "algorithm": args.algorithm,
+                    "pf_active": args.pf_active,
                     "initial_seed": initial_seed,
                     "current_seed": current_seed,
                     "total_timesteps": args.total_timesteps,
@@ -1091,6 +1115,8 @@ def main():
                 vec_env.save(os.path.join(experiment_folder, f"model_final.pkl"))
 
             print(f"\nTraining Complete. Experiment folder: {experiment_folder}")
+
+            break
 
 
         except (EOFError, BrokenPipeError, Exception) as e:

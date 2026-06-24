@@ -42,7 +42,7 @@ MAX_NODES = 100000
 class RobotNavEnv(gym.Env):
 
     def __init__(self, render=False, world_file="robot_world.yaml", pf_active=False, seed=0, 
-                 is_eval=False, is_testing=False, is_serial_eval=True, worker_id=0, num_workers=1, num_eval_episodes=8, save_eval_maps=False):
+                 is_eval=False, is_testing=False, is_serial_eval=True, worker_id=0, num_workers=1, num_eval_episodes=8, save_eval_maps=False, is_run = False):
         super(RobotNavEnv, self).__init__()
 
         self.seed = seed
@@ -51,6 +51,7 @@ class RobotNavEnv(gym.Env):
         self.is_serial_eval = is_serial_eval 
         self.worker_id = worker_id
         self.save_eval_maps = save_eval_maps
+        self.is_run = is_run
 
         # 1. SEED DISTRIBUTION
         if (self.is_eval and not self.is_serial_eval) or self.is_testing:
@@ -119,7 +120,7 @@ class RobotNavEnv(gym.Env):
 
         # 6. REWARD WEIGHTS (Cleaned duplicates)
         self.waypoint_reward = 1.0
-        self.goal_reward = 50.0
+        self.goal_reward = 20.0
         self.w_progress = 2.0 
         self.w_rotation = 0.05          #Before 0.02
         self.w_wiggle = 0.08            #Before 0.05
@@ -134,9 +135,9 @@ class RobotNavEnv(gym.Env):
         self.heading_margin = 0.2
         self.w_heading = 2.0
 
-        self.collision_penalty = -50
-        self.collision_goal_penalty = -30
-        self.truncation_penalty = -5
+        self.collision_penalty = -15
+        self.collision_goal_penalty = -10
+        self.truncation_penalty = -15
         self.step_penalty = -0.005 
 
         # 7. ALGORITHM & SPACES CONFIG
@@ -678,9 +679,6 @@ class RobotNavEnv(gym.Env):
 
             self.prev_heading_error = current_heading_error
 
-            # 2c. Velocity Damping (Brake near the dock)
-            velocity_penalty = -2.0 * abs(action[0])
-            total_rew += velocity_penalty
 
             # Add both to total reward
             total_rew += (dist_progress * self.w_progress) + (heading_progress * self.w_heading)
@@ -855,6 +853,9 @@ class RobotNavEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        if(self.is_run == True):
+             plt.close('all')
         
         # --- MAP SKIPPING SAFEGUARD ---
         max_skips = 10
@@ -881,7 +882,7 @@ class RobotNavEnv(gym.Env):
                 random.seed(active_seed)
                 np.random.seed(active_seed)
                 
-                idx = self.np_random.integers(0, len(self.map_files))
+                idx = np.random.randint(0, len(self.map_files))
 
             if hasattr(self.sim, 'set_random_seed'):
                 self.sim.set_random_seed(active_seed)
@@ -1016,10 +1017,6 @@ class RobotNavEnv(gym.Env):
         # Move the robot
         ctrl_action = np.array([[action[0]], [action[1]]])
         self.sim.step(ctrl_action)
-
-        # Only cast Lidar rays every 5th physics step
-        if self.step_counter % 5 == 0:
-            self.current_lidar_scan = self.lidar.get_scan()
 
         # --- ESTIMATION ---
         robot_state = self.sim.get_robot_state()

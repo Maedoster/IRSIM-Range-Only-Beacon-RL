@@ -1,0 +1,30 @@
+[workspace]
+authors = ["Maedoster <tommasi.edoardo@virgilio.it>"]
+channels = ["conda-forge"]
+name = "Progetto Tesi IRSIM_RL"
+platforms = ["win-64"]
+version = "0.3.0"
+
+[system-requirements]
+cuda = "13.0"
+
+[tasks]
+train = "python IRSIM_RL/train.py"
+test = "python IRSIM_RL/test.py"
+run = "python IRSIM_RL/run.py"
+
+[dependencies]
+python = "3.10.20.*"
+pytorch = "2.11.0.*"
+numpy = "1.26.4.*"             
+matplotlib = "3.8.3.*"
+pyyaml = "6.0.3.*"
+stable-baselines3 = "2.7.1.*"
+
+[pypi-dependencies]
+torch = { version = "==2.11.0", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "==0.26.0+cu130", index = "https://download.pytorch.org/whl/cu130" }
+tensorboard = { version = "==2.16.2" }
+gymnasium = { version = "==1.2.3" }
+ir-sim = { version = "==2.10.0", extras = ["all"] }
+
