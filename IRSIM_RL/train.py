@@ -791,11 +791,11 @@ def main():
 
             if USE_DUMMY_EVAL:
                 print(">>> Using DummyVecEnv for Evaluation (Sequential on Main Thread)")
-                eval_env = DummyVecEnv([make_eval_env(map_path, args.pf_active, 0, eval_seed, env_crash_log, args.num_envs)])
+                eval_env = DummyVecEnv([make_eval_env(map_path, args.pf_active, 0, eval_seed, env_crash_log, args.num_eval_envs)])
             else:
                 print(">>> Using SubprocVecEnv for Evaluation (Parallel Processes)")
-                eval_env = SubprocVecEnv([make_eval_env(map_path, args.pf_active, i, eval_seed, env_crash_log, args.num_envs, args.save_eval_maps, args.use_dummy_eval) 
-                for i in range(args.num_envs)])
+                eval_env = SubprocVecEnv([make_eval_env(map_path, args.pf_active, i, eval_seed, env_crash_log, args.num_eval_envs, args.eval_episodes, args.save_eval_maps, args.use_dummy_eval) 
+                for i in range(args.num_eval_envs)])
             
             set_random_seed(initial_seed)
 

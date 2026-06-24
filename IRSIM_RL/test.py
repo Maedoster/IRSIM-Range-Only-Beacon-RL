@@ -56,7 +56,7 @@ def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
 # ==========================================
 def main():
     parser = argparse.ArgumentParser(description="Parallel RL Testing Script")
-    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_20360_86%", help="Name of the experiment folder inside 'models/'")
+    parser.add_argument('--experiment-dir', type=str, default="modello_migliore", help="Name of the experiment folder inside 'models/'")
     parser.add_argument('--model-name', type=str, default="best_model", help="Name of the saved model zip/pkl (without extension)")
     parser.add_argument('--num-episodes', type=int, default=500, help="Total number of episodes to test")
     parser.add_argument('--num-envs', type=int, default=4, help="Number of parallel environments to run")
@@ -173,6 +173,26 @@ def main():
         print(f"Average Reward : {mean_reward:.2f}")
         print(f"Average Steps  : {mean_steps:.1f}")
 
+        # --- NEW CODE: Save results to JSON ---
+        results_dict = {
+            "total_episodes": args.num_episodes,
+            "success_rate": success_rate,
+            "collision_rate": collision_rate,
+            "timeout_rate": timeout_rate,
+            "collision_goal_rate": collision_goal_rate,
+            "mean_reward": float(mean_reward),
+            "mean_steps": float(mean_steps),
+            "successful_episodes": successful_episodes,
+            "collision_episodes": collision_episodes,
+            "timeout_episodes": timeout_episodes,
+            "collision_goal_episodes": collision_goal_episodes
+        }
+        
+        results_file_path = os.path.join(os.path.dirname(experiment_dir), "test_results.json")
+        with open(results_file_path, "w") as f:
+            json.dump(results_dict, f, indent=4)
+            
+        print(f"\nResults successfully saved to: {results_file_path}")
         print("="*50 + "\n")
 
     except Exception as e:
