@@ -11,6 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DIR = os.path.join(BASE_DIR, "IRSimDataset")
 EVAL_DIR = os.path.join(BASE_DIR, "EvalDataset")
 TEST_DIR = os.path.join(BASE_DIR, "TestDataset")
+SEED_FILE = os.path.join(BASE_DIR, "seed_split.txt")
 
 def main():
     # 1. Create target directories if they don't exist
@@ -59,10 +60,15 @@ def main():
         dst_path = os.path.join(TEST_DIR, f)
         shutil.move(src_path, dst_path)
 
+    # 7. Save the seed to a file for future reference
+    with open(SEED_FILE, "w") as f:
+        f.write(str(SEED))
+
     print("\n✅ Dataset split complete!")
     print(f"  - EvalDataset: {len(eval_files)} files")
     print(f"  - TestDataset: {len(test_files)} files")
     print(f"  - IRSimDataset (Remaining for Training): {total_files - NUM_EVAL - NUM_TEST} files")
+    print(f"  - Seed saved to: {SEED_FILE}")
 
 if __name__ == "__main__":
     main()
