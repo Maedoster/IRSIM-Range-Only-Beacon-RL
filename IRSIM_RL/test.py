@@ -188,7 +188,7 @@ def main():
             "collision_goal_episodes": collision_goal_episodes
         }
         
-        results_file_path = os.path.join(os.path.dirname(experiment_dir), "test_results.json")
+        results_file_path = os.path.join(experiment_dir, "test_results.json")
         with open(results_file_path, "w") as f:
             json.dump(results_dict, f, indent=4)
             
