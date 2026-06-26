@@ -120,15 +120,15 @@ class RobotNavEnv(gym.Env):
 
         # 6. REWARD WEIGHTS (Cleaned duplicates)
         self.waypoint_reward = 1.0
-        self.goal_reward = 20.0
+        self.goal_reward = 15.0
         self.w_progress = 2.0 
         self.w_rotation = 0.05          #Before 0.02
         self.w_wiggle = 0.08            #Before 0.05
         
         self.w_obstacle_front = 4.0 #before 10.0  
         self.w_obstacle_side = 1.5  #before 3.0    
-        self.safe_dist_front = 0.40 #Before 0.20
-        self.safe_dist_side = 0.20  #Before 0.10
+        self.safe_dist_front = 0.45 #Before 0.40
+        self.safe_dist_side = 0.35  #Before 0.30
 
         self.standoff_dist = 0.5
         self.standoff_margin = 0.15
@@ -137,7 +137,7 @@ class RobotNavEnv(gym.Env):
 
         self.collision_penalty = -15
         self.collision_goal_penalty = -10
-        self.truncation_penalty = -15
+        self.truncation_penalty = -10
         self.step_penalty = -0.005 
 
         # 7. ALGORITHM & SPACES CONFIG
@@ -341,11 +341,13 @@ class RobotNavEnv(gym.Env):
             },
             "sparse_penalties": {
                 "collision": self.collision_penalty,
+                "goal_collision": self.collision_goal_penalty,
                 "truncation": self.truncation_penalty
             },
             "dense_rewards": {
                 "progress_formula": "progress = (self.prev_dist - dist_ghost) * self.w_progress",
                 "progress_multiplier": self.w_progress,
+
             },
             "dense_penalties": {
                 "time_step": self.step_penalty,
@@ -362,7 +364,16 @@ class RobotNavEnv(gym.Env):
                 "w_rotation": self.w_rotation,
 
                 "wiggle_penalty_formula": "wiggle_penalty = -self.w_wiggle * action_diff",
-                "w_wiggle": self.w_wiggle
+                "w_wiggle": self.w_wiggle,
+
+                "heading_formula": "facing_goal = abs(diff_rad_norm) <= self.heading_margin",
+                "heading": self.w_heading,
+                "heading_margin": self.heading_margin,
+
+                "standoff_formula": "at_standoff = abs(dist_ghost - self.standoff_dist) <= self.standoff_margin",
+                "standoff_dist": self.standoff_dist,
+                "standoff_margin": self.standoff_margin
+
             },
         }
 
@@ -562,7 +573,7 @@ class RobotNavEnv(gym.Env):
             except Exception as e:
                 print(f"Warning: Failed to cleanly close old irsim instance: {e}")
                         
-        self.sim = irsim.make(yaml_path, display=self.render_mode)
+        self.sim = irsim.make(yaml_path, display=self.render_mode, log_level="CRITICAL")
 
         if hasattr(self.sim, 'set_random_seed'):
             self.sim.set_random_seed(self.seed)
