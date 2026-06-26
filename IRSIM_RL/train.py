@@ -497,6 +497,10 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
                         current_lengths[i] = 0.0
                         
                         episodes_completed += 1
+
+                        if self.verbose > 0:
+                            rooms_left = max(0, self.n_eval_episodes - episodes_completed)
+                            print(f"\r[EVAL RUNNING] Progress: {episodes_completed}/{self.n_eval_episodes} rooms evaluated | {rooms_left} left to test...", end="", flush=True)
                         
                         info = infos[i]
                         actual_info = info.get("final_info", info)
