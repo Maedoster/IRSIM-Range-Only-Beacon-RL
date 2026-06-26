@@ -565,7 +565,8 @@ class RobotNavEnv(gym.Env):
         if hasattr(self, 'sim') and self.sim is not None:
             try:
                # 1. Use the native Gym alias, but OVERRIDE the 3-second delay bomb
-                self.sim.end(ending_time=0.0) 
+                if not self.is_run:
+                    self.sim.end(ending_time=0.0) 
                 
                 # 2. Delete the Python object and force garbage collection
                 del self.sim
@@ -867,6 +868,7 @@ class RobotNavEnv(gym.Env):
 
         if(self.is_run == True):
              plt.close('all')
+             
         
         # --- MAP SKIPPING SAFEGUARD ---
         max_skips = 10
