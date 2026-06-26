@@ -1089,7 +1089,8 @@ def main():
 
 
             print(f"\n[Metadata] Configuration saved to {os.path.join(experiment_folder, meta_name)}")
-            print(f"[Training] Starting {args.total_timesteps} timesteps...")
+
+
 
             # Set reset_num_timesteps based on whether we are resuming or not
             # Calculate remaining timesteps
@@ -1101,8 +1102,15 @@ def main():
                 remaining_steps = args.total_timesteps
                 do_reset_timesteps = True
 
-            if remaining_steps > 0:
+            if current_resume_folder is None or recovery_count == -1:
+                print(f"[Training] Starting {args.total_timesteps} timesteps...")
+
+            else:
                 print(f"[Training] Resuming for {remaining_steps} remaining timesteps...")
+
+
+            if remaining_steps > 0:
+
                 model.learn(total_timesteps=remaining_steps, callback=callback_list, reset_num_timesteps=do_reset_timesteps)
             else:
                 print("[Training] Total timesteps already reached. Exiting.")

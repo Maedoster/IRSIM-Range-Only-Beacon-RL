@@ -12,7 +12,7 @@ cuda = "13.0"
 train = "python IRSIM_RL/train.py"
 test = "python IRSIM_RL/test.py"
 run = "python IRSIM_RL/run.py"
-convert = "python HouseExpo_IRSim_Converter/convert.py"
+convert = "python HouseExpo_IRSim_Converter/Convert.py"
 occupancy = "python HouseExpo_IRSim_Converter/ValidSpacesMapsConverter.py"
 split = "python HouseExpo_IRSim_Converter/Eval_Test_Split.py"
 
@@ -23,6 +23,7 @@ numpy = "1.26.4.*"
 matplotlib = "3.8.3.*"
 pyyaml = "6.0.3.*"
 stable-baselines3 = "2.7.1.*"
+psutil = ">=7.2.2,<8"
 
 
 [pypi-dependencies]
