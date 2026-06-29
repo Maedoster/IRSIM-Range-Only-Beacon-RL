@@ -7,7 +7,6 @@ import math
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Adjust these paths to match your project structure
 IRSIM_DIR = os.path.join(BASE_DIR, "IRSimDataset")
 GRID_DIR = os.path.join(BASE_DIR, "OccupancyGrids")
 DEBUG_DIR = os.path.join(BASE_DIR, "debug_grid_alignment")
@@ -20,13 +19,12 @@ grid_files = [f for f in os.listdir(GRID_DIR) if f.endswith(".npy")]
 for g_file in grid_files:
     map_id = g_file.replace(".npy", "")
     
-    # 1. Load Grid and Meta
+    #Load Grid and Meta
     grid = np.load(os.path.join(GRID_DIR, g_file))
     with open(os.path.join(GRID_DIR, f"{map_id}_meta.json"), 'r') as f:
         meta = json.load(f)
     
-    # 2. Load Corresponding YAML (handle world_ prefix if necessary)
-    # If your YAMLs are world_xxx.yaml and grids are xxx.npy:
+    #Load Corresponding YAML (handle world_ prefix if necessary)
     yaml_name = f"{map_id}.yaml"
     yaml_path = os.path.join(IRSIM_DIR, yaml_name)
     
@@ -38,7 +36,7 @@ for g_file in grid_files:
         world = yaml.safe_load(f)
     obstacles = world.get("obstacle", [])
 
-    # 3. Create Plot
+    #Create Plot
     plt.figure(figsize=(12, 10))
     
     # We display the grid. 

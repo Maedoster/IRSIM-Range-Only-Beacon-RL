@@ -88,7 +88,7 @@ class ParticleFilter(object):
         :param p: particle set
         :return mean error of the system
         """
-        #8- Target prediction (we predict the best estimation for target's position = mean of all particles)
+        #Target prediction (we predict the best estimation for target's position = mean of all particles)
         sumx = 0.0
         sumy = 0.0
         sumvx = 0.0
@@ -226,24 +226,24 @@ class ParticleFilter(object):
     def measurement_prob(self, measurement, observer):
         """ Vectorized measurement probability calculation """
         
-        # 1. Fetch the validity of ALL particles in one shot
+        # Fetch the validity of ALL particles in one shot
         # self.x[:, 0] gets all x coordinates; self.x[:, 2] gets all y coordinates
         valid_mask = self.is_valid(self.x[:, 0], self.x[:, 2])
         
-        # 2. Fully vectorized distances calculations for all particles
+        #Fully vectorized distances calculations for all particles
         dist_all = np.sqrt((self.x[:, 0] - observer[0])**2 + (self.x[:, 2] - observer[2])**2)
         dist_old = np.sqrt((self.x[:, 0] - self.observer_old[0])**2 + (self.x[:, 2] - self.observer_old[2])**2)
         inc_observer = np.sqrt((observer[0] - self.observer_old[0])**2 + (observer[2] - self.observer_old[2])**2)
         
-        # 3. Vectorized Gaussian calculation (assuming self.gaussian accepts array inputs)
+        #Vectorized Gaussian calculation (assuming self.gaussian accepts array inputs)
         self.w = self.gaussian(self, dist_old, dist_all, self.sense_noise, self.measurement_old, measurement, inc_observer)
         
-        # 4. Apply KILL SWITCH: Instantly suppress weights of out-of-bounds/invalid particles
+        #Apply KILL SWITCH: Instantly suppress weights of out-of-bounds/invalid particles
         self.w[np.logical_not(valid_mask)] = 1e-100
         
-        # Update histories (keeping compatibility with your TDOA approach)
+        # Update histories
         self.measurement_old = measurement
-        self.dist_all_old = dist_all  # This is now naturally a numpy array
+        self.dist_all_old = dist_all  
         self.w_old = self.w.copy()
         self.observer_old = observer
         return
@@ -270,7 +270,7 @@ class ParticleFilter(object):
            #method = 3 #compound method presented in OCEANS'18 Kobe
         
         if method == 1:   
-            # 4- resampling with a sample probability proportional
+            # resampling with a sample probability proportional
             # to the importance weight
             p3 = np.zeros([self.particle_number,self.dimx])
             index = int(np.random.random() * self.particle_number)
@@ -396,7 +396,7 @@ class ParticleFilter(object):
             return
     
     
-    #6- It computes the average error of each particle relative to the target pose. We call 
+    #It computes the average error of each particle relative to the target pose. We call 
             #this function at the end of each iteration:
             # here we get a set of co-located particles   
     #At every iteration we want to see the overall quality of the solution, for this 
@@ -404,7 +404,7 @@ class ParticleFilter(object):
     def evaluation(self, observer, z, max_error=50):
         """ Calculate the mean error of the system """
         if self.method != 'area':
-            # 1. Calcolo Errore di Distanza
+            # Error Distance
             sum2 = 0.0
             for i in range(self.particle_number):
                 dx = (self.x[i][0] - observer[0])
@@ -414,17 +414,16 @@ class ParticleFilter(object):
             
             avg_error = sum2 / self.particle_number
 
-            # 2. Calcolo Matrice di Covarianza con Check di sicurezza
+            # Covariance matrix
             err_x = self.x.T[0] - self._x[0]
             err_y = self.x.T[2] - self._x[2]
             
-            # np.cov può dare errore se i dati sono costanti o NaN
+           
             cov = np.cov(err_x, err_y)
             
             if not np.any(np.isnan(cov)) and not np.any(np.isinf(cov)):
                 try:
                     vals, vecs = np.linalg.eig(cov)
-                    # Assicurati che gli autovalori siano positivi (possono essere micro-negativi per errore floating point)
                     vals = np.maximum(vals, 1e-12)
                     
                     confidence_int = 2.326**2
@@ -433,22 +432,18 @@ class ParticleFilter(object):
                     vec_x, vec_y = vecs[:, 0]
                     self.covariance_theta = np.arctan2(vec_y, vec_x)
                     
-                    # Logica di Reset: se l'errore è enorme, reinizializza il PF
                     cov_norm = np.sqrt(self.covariance_vals[0]**2 + self.covariance_vals[1]**2)
                     if abs(avg_error - z) > max_error and cov_norm < 5.:
                         self.initialized = False
                 except np.linalg.LinAlgError:
-                    # Se l'algebra lineare fallisce, meglio resettare
                     self.initialized = False
             else:
                 self.initialized = False
 
         else:
-            # Caso 'area'
             if np.max(self.w) < 0.1:
                 self.initialized = False
             
-            # Check dispersione per sicurezza
             max_dispersion = np.sqrt((np.max(self.x.T[0]) - np.min(self.x.T[0]))**2 + 
                                      (np.max(self.x.T[2]) - np.min(self.x.T[2]))**2)
         return

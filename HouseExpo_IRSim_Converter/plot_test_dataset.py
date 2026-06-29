@@ -3,9 +3,7 @@ import yaml
 import matplotlib.pyplot as plt
 import math
 
-# ----------------------------------------------------------------
-# PATH CONFIGURATION
-# ----------------------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_ROOT = os.path.join(BASE_DIR, "IRSimDataset_Sorted", "Hard")
 DEBUG_DIR = os.path.join(BASE_DIR, "hard_plots_debug")
@@ -21,9 +19,7 @@ if not files:
 
 print(f"Found {len(files)} YAML maps in TestDataset. Generating plots...")
 
-# ----------------------------------------------------------------
-# PLOTTING LOOP
-# ----------------------------------------------------------------
+
 for idx, file in enumerate(files, 1):
     yaml_path = os.path.join(TEST_ROOT, file)
     

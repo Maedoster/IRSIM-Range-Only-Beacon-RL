@@ -4,9 +4,6 @@ import shutil
 import yaml
 import numpy as np
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_DIR = os.path.join(BASE_DIR, "IRSimDataset")
@@ -14,7 +11,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "IRSimDataset_Sorted")
 
 
 # ==========================================
-# GEOMETRY HELPERS
+# UNUSED IN THE THESIS
 # ==========================================
 def shoelace_area(vertices):
     """Calculates the area of a polygon given its vertices [x, y] using the Shoelace formula."""
@@ -36,7 +33,7 @@ def calculate_yaml_difficulty(yaml_path):
         with open(yaml_path, 'r') as f:
             data = yaml.safe_load(f)
             
-        # 1. Calculate Total World Area
+        #Calculate Total World Area
         world_data = data.get('world', {})
         width = world_data.get('width', 0.0)
         height = world_data.get('height', 0.0)
@@ -50,7 +47,7 @@ def calculate_yaml_difficulty(yaml_path):
         if 'obstacle' not in data or not data['obstacle']:
             return 0.0 
             
-        # 2. Calculate sum of all obstacle areas
+        #Calculate sum of all obstacle areas
         for obs in data['obstacle']:
             if 'shape' not in obs:
                 continue
@@ -67,7 +64,7 @@ def calculate_yaml_difficulty(yaml_path):
                 if vertices:
                     total_obstacle_area += shoelace_area(vertices)
                     
-        # 3. Return the density ratio (0.0 means empty, closer to 1.0 means fully blocked)
+        #Return the density ratio (0.0 means empty, closer to 1.0 means fully blocked)
         density_ratio = total_obstacle_area / world_area
         return density_ratio
         
@@ -75,9 +72,7 @@ def calculate_yaml_difficulty(yaml_path):
         print(f"Error parsing {yaml_path}: {e}")
         return None
 
-# ==========================================
-# MAIN SORTING & COPYING LOGIC
-# ==========================================
+
 def main():
     search_pattern = os.path.join(INPUT_DIR, "*.yaml")
     yaml_files = glob.glob(search_pattern)
@@ -89,7 +84,7 @@ def main():
     print(f"Found {len(yaml_files)} YAML maps. Calculating mathematical difficulty...")
     map_scores = []
     
-    # 1. Score every map
+    #Score every map
     for i, yaml_path in enumerate(yaml_files):
         obstacle_area = calculate_yaml_difficulty(yaml_path)
         
@@ -103,10 +98,10 @@ def main():
         if (i + 1) % 5000 == 0:
             print(f"Analyzed {i + 1}/{len(yaml_files)}...")
 
-    # 2. Sort by total obstacle area (Easy -> Hard)
+    #Sort by total obstacle area (Easy -> Hard)
     map_scores.sort(key=lambda x: x["area"])
 
-    # 3. Divide into 3 equal layers
+    #Divide into 3 equal layers
     total_valid = len(map_scores)
     third = total_valid // 3
 
@@ -116,7 +111,7 @@ def main():
         "Hard": map_scores[2*third:]
     }
 
-    # 4. Create directories and copy files
+    #Create directories and copy files
     print("\nStarting file copying process...")
     
     for tier_name, maps in tiers.items():
