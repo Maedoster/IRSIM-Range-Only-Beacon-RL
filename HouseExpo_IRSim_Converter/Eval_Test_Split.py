@@ -14,20 +14,18 @@ TEST_DIR = os.path.join(BASE_DIR, "TestDataset")
 SEED_FILE = os.path.join(BASE_DIR, "seed_split.txt")
 
 def main():
-    # 1. Create target directories if they don't exist
+    #Create target directories if they don't exist
     os.makedirs(EVAL_DIR, exist_ok=True)
     os.makedirs(TEST_DIR, exist_ok=True)
 
-    # 2. Get all yaml files from the source directory
+    #Get all yaml files from the source directory
     if not os.path.exists(SOURCE_DIR):
         print(f"Error: Source directory '{SOURCE_DIR}' does not exist.")
         return
 
     files = [f for f in os.listdir(SOURCE_DIR) if f.endswith(".yaml")]
 
-    # CRITICAL: Sort the files first!
-    # os.listdir() is non-deterministic. Sorting guarantees that the list is in the 
-    # exact same order before the random seed is applied, ensuring 100% reproducibility.
+    #Sorting for reproducibility
     files.sort()
 
     total_files = len(files)
@@ -37,30 +35,30 @@ def main():
         print(f"Error: Not enough files to split! Need {NUM_EVAL + NUM_TEST}, but only found {total_files}.")
         return
 
-    # 3. Apply the random seed and shuffle the list
+    #Apply the random seed and shuffle the list
     print(f"Applying random seed: {SEED}")
     random.seed(SEED)
     random.shuffle(files)
 
-    # 4. Slice the list into our sets
+    #Slice the list into our sets
     eval_files = files[:NUM_EVAL]
     test_files = files[NUM_EVAL : NUM_EVAL + NUM_TEST]
 
-    # 5. Move the files to EvalDataset
+    #Move the files to EvalDataset
     print(f"\nMoving {NUM_EVAL} files to '{EVAL_DIR}'...")
     for f in eval_files:
         src_path = os.path.join(SOURCE_DIR, f)
         dst_path = os.path.join(EVAL_DIR, f)
         shutil.move(src_path, dst_path)
 
-    # 6. Move the files to TestDataset
+    #Move the files to TestDataset
     print(f"Moving {NUM_TEST} files to '{TEST_DIR}'...")
     for f in test_files:
         src_path = os.path.join(SOURCE_DIR, f)
         dst_path = os.path.join(TEST_DIR, f)
         shutil.move(src_path, dst_path)
 
-    # 7. Save the seed to a file for future reference
+    #Save the seed to a file for future reference
     with open(SEED_FILE, "w") as f:
         f.write(str(SEED))
 
