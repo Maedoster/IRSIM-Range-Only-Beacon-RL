@@ -8,7 +8,6 @@ import math
 import matplotlib
 matplotlib.use('Agg')
 import random
-import warnings 
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
@@ -17,7 +16,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import heapq
-from scipy.ndimage import binary_dilation, distance_transform_edt
+from scipy.ndimage import binary_dilation
 
 
 
@@ -36,8 +35,6 @@ MAX_NODES = 100000
 # ==========================================
 # Gymnasium Environment definition
 # ==========================================
-
-
 
 class RobotNavEnv(gym.Env):
 
@@ -118,7 +115,7 @@ class RobotNavEnv(gym.Env):
         self.reachedGoal = False
         self.accumulated_episode_reward = 0.0 
 
-        # 6. REWARD WEIGHTS (Cleaned duplicates)
+        # 6. REWARD WEIGHTS
         self.waypoint_reward = 1.0
         self.goal_reward = 15.0
         self.w_progress = 2.0 
@@ -171,7 +168,7 @@ class RobotNavEnv(gym.Env):
             self.sim.reset_plot()
             
             # ==========================================
-            # NATIVE OCCUPANCY GRID RENDERING (FOOLPROOF)
+            # NATIVE OCCUPANCY GRID RENDERING
             # ==========================================
             # if self.inflated_grid is not None:
             #     # 1. Extract and cache coordinates ONCE per map to keep FPS high
@@ -206,7 +203,6 @@ class RobotNavEnv(gym.Env):
 
             # --- GHOST AND LS POINTS ---
             if self.pf_active:
-                # (Keep your existing PF ghost rendering here)
                 if hasattr(self, 'estimated_goal'):
                     gx, gy = self.estimated_goal
                     self.sim.draw_points(points=[[gx, gy]], c='magenta', s=200)
@@ -241,8 +237,7 @@ class RobotNavEnv(gym.Env):
         if not self.is_eval:
             return
         
-        # 1. Use absolute paths so you know exactly where files are saved
-        # This creates the folder in the same directory as this script
+        # 1. Use absolute paths
         screenshot_dir = os.path.join(BASE_DIR, "eval_map_configs")
         os.makedirs(screenshot_dir, exist_ok=True)
         
@@ -253,7 +248,7 @@ class RobotNavEnv(gym.Env):
         print(f"[Eval Tracker] Attempting to save map screenshot to:\n -> {save_path}")
         
         try:
-            # 2. Call your custom render method to draw the paths, ghost, and grid
+            # 2. Call custom render method to draw the paths, ghost, and grid
             self.render()
             
             # 3. Grab the active Matplotlib figure directly
@@ -271,21 +266,19 @@ class RobotNavEnv(gym.Env):
 
     def close(self):
         """Ensure all resources are freed when the environment is closed."""
-        # 1. Shut down the irsim backend using the correct .end() method
+        # Shut down the irsim backend using the .end() method
         if hasattr(self, 'sim') and self.sim is not None:
             try:
                 self.sim.end(ending_time=0.0)
             except Exception as e:
                 print(f"Warning: Failed to cleanly close irsim instance during env.close(): {e}")
-    
-        # 2. Excellent addition: This prevents massive RAM leaks if irsim 
-        # leaves detached Matplotlib figures floating in the background!
+
         try:
             plt.close('all')
         except ImportError:
-            pass # Just in case plt isn't imported at the top of your file
+            pass
             
-        # 3. Call the parent Gym/Gymnasium class closer
+        # Call the parent Gym/Gymnasium class closer
         super().close()
 
     def _reset_episode_tracking(self, start_position=None):
@@ -300,9 +293,8 @@ class RobotNavEnv(gym.Env):
 
         self.last_position = None
         self.last_theta = None
-        
-        # --- NEW: Reset success/failure flags ---
-        self.success = False 
+
+        self.success = False
         self.failure = False
         self.crashed_into_goal = False
         self.done = False
@@ -313,7 +305,7 @@ class RobotNavEnv(gym.Env):
             self.last_position = None
 
     def _get_episode_info(self, terminal, reward):
-        # Calculate current target error (Ground Truth vs Estimate)
+
         current_estimate = self.estimated_goal if self.pf_active else self.estimated_goal_ls
         real_goal = self.sim.robot.goal if hasattr(self.sim, 'robot') else self.sim.get_robot_info(0).goal
         target_error = np.linalg.norm(current_estimate - real_goal[:2, 0])
@@ -327,7 +319,7 @@ class RobotNavEnv(gym.Env):
             'reward': reward, 
             'target_error': target_error, 
             'total_distance': self.total_distance,
-            'average_velocity': avg_velocity, # Now properly included
+            'average_velocity': avg_velocity,
             'steps': self.time 
         }
     
@@ -515,8 +507,7 @@ class RobotNavEnv(gym.Env):
                     clusters.append(centroid.tolist())
                 # Start new cluster
                 current_cluster = [current_wp]
-        
-        # Don't forget the last cluster
+
         if current_cluster:
             centroid = np.mean(current_cluster, axis=0)
             clusters.append(centroid.tolist())
@@ -532,7 +523,7 @@ class RobotNavEnv(gym.Env):
             return True
             
         res = self.map_meta['resolution']
-        step_size = res / 2.0  # Sample twice per grid cell to be absolutely safe
+        step_size = res / 2.0
         steps = int(dist / step_size)
         
         # If points are very close, just check the endpoints
@@ -554,17 +545,16 @@ class RobotNavEnv(gym.Env):
         """Helper function to load a new simulator instance and its corresponding grid mapping."""
         base_name = os.path.basename(yaml_path).replace(".yaml", "")
         self.grid_dir = grid_dir
-        
-        # 1. FIXED: Added safety check to ensure grids actually exist before skipping
+
         if self.current_map_name == base_name and hasattr(self, 'inflated_grid'):
             return
             
         self.current_map_name = base_name
         
-        # --- FIXED: Destroy the old simulator instance cleanly ---
+        # Destroy the old simulator instance cleanly
         if hasattr(self, 'sim') and self.sim is not None:
             try:
-               # 1. Use the native Gym alias, but OVERRIDE the 3-second delay bomb
+               # 1. Use the native Gym alias, but OVERRIDE the 3-second delay
                 if not self.is_run:
                     self.sim.end(ending_time=0.0) 
                 
@@ -601,7 +591,7 @@ class RobotNavEnv(gym.Env):
         y, x = np.ogrid[-pixel_radius:pixel_radius+1, -pixel_radius:pixel_radius+1]
         mask = x**2 + y**2 <= pixel_radius**2
         
-        # 3. OPTIMIZED: Cast to int8 to play perfectly with your A* `== 0` checks
+        # 3. Cast to int8
         dilated_bool = binary_dilation(raw_grid, structure=mask)
         self.inflated_grid = dilated_bool.astype(np.int8)
         self.occupancy_grid = raw_grid.astype(np.int8)
@@ -649,14 +639,12 @@ class RobotNavEnv(gym.Env):
         """Uses the inflated occupancy grid to find a truly navigable spawn point."""
         map_obj = self.sim.get_map()
         w, h = map_obj.width, map_obj.height
-        
-        # 500 attempts takes virtually 0 milliseconds now
-        max_attempts = 500 
+
+        max_attempts = 500
         for _ in range(max_attempts):
             x = float(self.np_random.uniform(0.5, w - 0.5))
             y = float(self.np_random.uniform(0.5, h - 0.5))
             
-            # Fast O(1) bounds and occupancy check handles everything
             if self.is_valid_pos(x, y):
                 return x, y
         
@@ -779,7 +767,7 @@ class RobotNavEnv(gym.Env):
     def _extract_sim_data(self, action):
         scan = self.sim.get_lidar_scan()
         latest_scan = scan["ranges"] if isinstance(scan, dict) else scan
-        robot_state = self.sim.get_robot_state()  # [x, y, theta]
+        robot_state = self.sim.get_robot_state()
         
         # --- Compute Ground Truth Kinematics ---
         dt = getattr(self, "dt", 0.1)
@@ -800,8 +788,6 @@ class RobotNavEnv(gym.Env):
         self.last_position = current_pos
         self.last_theta = current_theta
         
-        
-        # Keep your existing target/ghost calculations...
         if hasattr(self.sim, 'robot'):
             real_goal = np.array([self.sim.robot.goal[0,0], self.sim.robot.goal[1,0]])
             collision = self.sim.robot.collision
@@ -999,22 +985,19 @@ class RobotNavEnv(gym.Env):
         if self.save_eval_maps:
             self._save_eval_screenshot(selected_yaml)
         
-        # 1. Unpack the tuple immediately to make Pylance and Python happy
         sim_data = self._extract_sim_data(action=[0.0, 0.0])
         (
             latest_scan, distance, cos, sin, 
             collision, arrive, diff_rad, action, real_goal, true_v, true_w
         ) = sim_data
 
-        # 2. Set your tracking history variables using the unpacked data
         self.prev_heading_error = diff_rad
-        self.prev_dist = distance  # No need to recalculate this manually below anymore!
+        self.prev_dist = distance
 
         obs, terminal = self.prepare_state(sim_data) 
 
         self.prev_dist = np.linalg.norm(robot_state[:2, 0] - self.nav_goal)
         
-        # --- THE FIX: Pass physical tracking starting points safely ---
         self._reset_episode_tracking(start_position=robot_state[:2, 0])
         
         return obs, {}
@@ -1023,7 +1006,6 @@ class RobotNavEnv(gym.Env):
         if self.sim is None:
             raise RuntimeError("Environment simulation is not initialized. Did reset() fail?")
         
-        # 1. Global timer decrements (Do this right away)
         if hasattr(self, 'astar_cooldown') and self.astar_cooldown > 0:
             self.astar_cooldown -= 1
         
@@ -1036,26 +1018,28 @@ class RobotNavEnv(gym.Env):
         robot_pos_pf = np.array([robot_state[0,0], 0.0, robot_state[1,0], 0.0])
         real_goal = self.sim.robot.goal if hasattr(self.sim, 'robot') else self.sim.get_robot_info(0).goal
         dist_z = np.linalg.norm(robot_state[:2, 0] - real_goal[:2, 0])
-        
+
+        # ==========================================
+        # GATING LOGIC & STATE MACHINE (PF MODE)
+        # ==========================================
+
         if self.pf_active:
             self.target_tracker.updatePF(dt=0.1, new_range=True, z=dist_z, myobserver=robot_pos_pf)
             self.estimated_goal = np.array([self.target_tracker.pfxs[0], self.target_tracker.pfxs[2]])
-            # ==========================================
-            # GATING LOGIC & STATE MACHINE (PF MODE)
-            # ==========================================
+
             if self.state == "SEARCHING":
                 x_var = np.var(self.pf.x[:, 0])
                 y_var = np.var(self.pf.x[:, 2])
                 uncertainty = x_var + y_var
-                
+
                 self.nav_goal = self.estimated_goal.copy()
 
                 # Only attempt pathfinding if uncertainty is low AND cooldown has expired
                 if uncertainty < self.uncertainty_threshold and self.astar_cooldown == 0:
-                    
+
                     if self.is_valid_pos(self.estimated_goal[0], self.estimated_goal[1]):
                         path = self.get_astar_path(robot_state[:2, 0], self.estimated_goal)
-                        
+
                         if path is not None:
                             if len(path) > 1:
                                 # --- SUCCESS: Path found! No cooldown needed ---
@@ -1063,11 +1047,11 @@ class RobotNavEnv(gym.Env):
                                 pruned_path = []
                                 for wp in sparse_path:
                                     dist_to_goal = np.linalg.norm(np.array(wp) - self.estimated_goal)
-                                    if dist_to_goal > 0.3: 
+                                    if dist_to_goal > 0.3:
                                         pruned_path.append(wp)
                                     else:
-                                        break 
-                                        
+                                        break
+
                                 if len(pruned_path) > 0:
                                     self.current_path = pruned_path
                                     self.waypoint_index = 0
@@ -1082,11 +1066,11 @@ class RobotNavEnv(gym.Env):
                                 self.nav_goal = self.estimated_goal.copy()
                         else:
                             # --- FAILURE 1: A* calculation failed (unreachable topology) ---
-                            self.astar_cooldown = 60  # Set cooldown to rest the CPU
+                            self.astar_cooldown = 60
                             self.state = "SEARCHING"
                     else:
                         # --- FAILURE 2: Goal is inside a wall geometry ---
-                        self.astar_cooldown = 60  # Don't even waste CPU running A* on a wall
+                        self.astar_cooldown = 60
                         self.state = "SEARCHING"
 
             elif self.state == "FOLLOWING":
@@ -1102,45 +1086,65 @@ class RobotNavEnv(gym.Env):
                         self.state = "DOCKING"
                         self.nav_goal = self.estimated_goal.copy()
                         self.current_path = []
-                            
+
             elif self.state == "DOCKING":
                 self.nav_goal = self.estimated_goal.copy()
 
         else: # LS MODE
             self.target_tracker.updateLS(dt=0.1, new_range=True, z=dist_z, myobserver=robot_pos_pf)
-            
+
             if len(self.target_tracker.lsxs) > 0:
                 new_ls_estimate = np.array([self.target_tracker.lsxs[-1][0], self.target_tracker.lsxs[-1][2]])
-                
+
                 if self.state == "SEARCHING":
                     num_points = len(self.target_tracker.eastingpoints_LS)
                     self.estimated_goal_ls = new_ls_estimate
                     self.nav_goal = self.estimated_goal_ls.copy()
 
                     # Added cooldown check to LS mode to prevent CPU throttling
-                    if num_points >= 5 and self.astar_cooldown == 0: 
-                        
-                        if self.is_valid_pos(new_ls_estimate[0], new_ls_estimate[1]):
-                            path = self.get_astar_path(robot_state[:2, 0], new_ls_estimate)
-                            
-                            if path is not None and len(path) > 1:
-                                # --- SUCCESS: Path found! ---
-                                sparse_path = self.prune_path_to_sparse(path)
-                                self.current_path = sparse_path
-                                self.waypoint_index = 0
-                                self.nav_goal = np.array(self.current_path[0])
-                                self.state = "FOLLOWING"
+                    if num_points >= 5 and self.astar_cooldown == 0:
+
+                        if self.is_valid_pos(self.estimated_goal_ls[0], self.estimated_goal_ls[1]):
+                            path = self.get_astar_path(robot_state[:2, 0], self.estimated_goal_ls)
+
+                            if path is not None:
+                                if len(path) > 1:
+                                    # --- SUCCESS: Path found! No cooldown needed ---
+                                    sparse_path = self.prune_path_to_sparse(path)
+                                    pruned_path = []
+                                    for wp in sparse_path:
+                                        dist_to_goal = np.linalg.norm(np.array(wp) - self.estimated_goal_ls)
+                                        if dist_to_goal > 0.3:
+                                            pruned_path.append(wp)
+                                        else:
+                                            break
+
+                                    if len(pruned_path) > 0:
+                                        self.current_path = pruned_path
+                                        self.waypoint_index = 0
+                                        self.nav_goal = np.array(self.current_path[0])
+                                        self.state = "FOLLOWING"
+                                    else:
+                                        self.state = "DOCKING"
+
+                                else:
+                                    # Path is too short to be useful, go straight to docking
+                                    self.state = "DOCKING"
+                                    self.nav_goal = self.estimated_goal_ls.copy()
                             else:
-                                # --- FAILURE 1: A* failed ---
+                                # --- FAILURE 1: A* calculation failed (unreachable topology) ---
                                 self.astar_cooldown = 60
+                                self.state = "SEARCHING"
                         else:
-                            # --- FAILURE 2: LS estimate is inside a wall ---
+                            # --- FAILURE 2: Goal is inside a wall geometry ---
                             self.astar_cooldown = 60
-                
+                            self.state = "SEARCHING"
+
                 elif self.state == "FOLLOWING":
                     ls_drift = np.linalg.norm(new_ls_estimate - self.estimated_goal_ls)
                     dist_to_path_end = np.linalg.norm(new_ls_estimate - self.current_path[-1])
 
+                    # LS-specific safety check: if estimate jumps drastically, recalculate path
                     if ls_drift > 1.0 or dist_to_path_end > 1.5:
                         print("LS Estimate Jumped! Reverting to SEARCHING.")
                         self.state = "SEARCHING"
@@ -1152,20 +1156,18 @@ class RobotNavEnv(gym.Env):
                         dist_to_wp = np.linalg.norm(robot_state[:2, 0] - target_wp)
 
                         if dist_to_wp < 0.5:
-                            # FIXED: Check if there are more waypoints left
                             if self.waypoint_index < len(self.current_path) - 1:
                                 self.waypoint_index += 1
-                                target_wp = self.current_path[self.waypoint_index]
-                                self.nav_goal = np.array(target_wp)
+                                self.nav_goal = np.array(self.current_path[self.waypoint_index])
                                 self.prev_dist = np.linalg.norm(robot_state[:2, 0] - self.nav_goal)
                             else:
-                                # FIXED: Safely transition out of FOLLOWING mode at path end
                                 self.state = "DOCKING"
                                 self.nav_goal = new_ls_estimate.copy()
                                 self.current_path = []
 
+                        # Update the baseline estimate for the next iteration's drift calculation
                         self.estimated_goal_ls = new_ls_estimate
-                
+
                 elif self.state == "DOCKING":
                     self.nav_goal = new_ls_estimate.copy()
 
@@ -1177,9 +1179,8 @@ class RobotNavEnv(gym.Env):
         # --- DATA EXTRACTION & ENVIRONMENT PIPELINE ---
         sim_data = self._extract_sim_data(action=action)
         
-        # Clean execution: Separate the reward calculation from state preparation
-        reward_value = self.reward(sim_data) 
-        obs, terminal = self.prepare_state(sim_data) # Passes raw sim_data cleanly!
+        reward_value = self.reward(sim_data)
+        obs, terminal = self.prepare_state(sim_data)
 
         self._calculate_metrics(robot_state[:2, 0], action)
         self.time += 1
@@ -1187,10 +1188,9 @@ class RobotNavEnv(gym.Env):
         terminated = self.done
         truncated = self.time >= self.max_steps
 
-        # Handle timeout penalty safely without overwriting collision penalties
         if truncated and not terminated:
             reward_value = self.truncation_penalty
-            self.done = True  # Ensure the episode ends on timeout
+            self.done = True
 
         info = self._get_episode_info(terminated, reward_value)
     

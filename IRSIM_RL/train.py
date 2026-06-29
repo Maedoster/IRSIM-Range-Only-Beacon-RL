@@ -2,12 +2,13 @@ import json
 import shutil
 
 import os
+from pathlib import Path
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 import platform
 import sys
 import gymnasium
 import psutil
-from irsim import env
 import numpy as np
 import stable_baselines3
 import torch
@@ -15,8 +16,6 @@ import yaml
 import argparse
 import time
 import traceback
-
-
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -29,13 +28,6 @@ from stable_baselines3.common.callbacks import BaseCallback, EvalCallback, Check
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.utils import set_random_seed
-
-#Da Fixare
-#1) Se il robot non punta verso il goal quando A* genera il path, il robot non riesce ad arrivare al goal, non si gira verso il waypoint (anche senza turn penalty)
-#2) Far arrivare il robot al goal con un buon rateo senza collisioni 
-#3) Implementare RTTP*
-#4) Implementare dummyVecEnv per evaluation come scelta possibile
-
 
 # ==========================================
 # CONFIGURATION 
@@ -63,15 +55,14 @@ SAVE_EVAL_MAPS = False
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
-RESUME_FOLDER = None #r"C:\Users\tomma\Desktop\Tesi Magistrale\Progetto\IRSIM_RL\models\run_SAC_True_20360\crash_checkpoints"  # e.g., "models/run_SAC_True_12345" or "models/run_SAC_True_12345/crash_checkpoints"
-CHECKPOINT_NAME = "last_checkpoint"  # e.g., "best_model" or "SAC_recovery_380000_steps"
-
+RUN_FOLDER_NAME = "run_SAC_True_18615"
+CHECKPOINT_NAME = "last_checkpoint"
 
 # ==========================================
 # GLOBAL VARIABLES
 # ==========================================
 
-eval_env = None  # <--- Define eval_env globally
+eval_env = None
 
 
 # ==========================================
@@ -83,6 +74,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 MAP_DIR = os.path.join(PROJECT_ROOT, "HouseExpo_IRSim_Converter", "IRSimDataset")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 WORLDS_DIR = os.path.join(BASE_DIR, "worlds")
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(WORLDS_DIR, exist_ok=True)
@@ -98,10 +90,10 @@ def make_env(world_file, pf_active, rank, seed=0, log_file=None, num_workers=1, 
             world_file=world_file, 
             pf_active=pf_active, 
             seed=seed + rank,
-            is_eval=False,            # <--- Explicitly set to False for training
-            worker_id=rank,           # <--- Pass rank
-            num_workers=num_workers,   # <--- Pass total workers
-            num_eval_episodes= num_eval_episodes       # <--- Not used in training, but set to 0 for clarity
+            is_eval=False,
+            worker_id=rank,
+            num_workers=num_workers,
+            num_eval_episodes= num_eval_episodes
         )
         # Wrap the environment in the shield with logging enabled
         env = ExceptionShieldWrapper(env, log_file=log_file, rank=rank)
@@ -115,22 +107,21 @@ def make_eval_env(world_file, pf_active, rank, seed=0, log_file=None, num_worker
     def _init():
         raw_env = RobotNavEnv(
             render=False, 
-            world_file=world_file,     # Fixed: was map_path
-            pf_active=pf_active,       # Fixed: was PF_ACTIVE
+            world_file=world_file,
+            pf_active=pf_active,
             seed=seed,
             is_eval=True,   
             is_serial_eval= is_serial_eval,           
             worker_id=rank,            
-            num_workers=num_workers,    # Fixed: was NUM_EVAL_ENVS
+            num_workers=num_workers,
             num_eval_episodes=num_eval_episodes,  
             save_eval_maps =save_eval_maps
             
         )
-                    
-        # Ensure deterministic resetting across evaluations
-        shielded_eval_env = ExceptionShieldWrapper(raw_env, log_file=log_file, rank=rank) # Fixed: was env_crash_log
-                    
-        # Important: Monitor must be applied *before* vectorization
+
+        # Wrap the environment in the shield with logging enabled
+        shielded_eval_env = ExceptionShieldWrapper(raw_env, log_file=log_file, rank=rank)
+
         return Monitor(shielded_eval_env)
     return _init
 
@@ -172,7 +163,7 @@ class ExceptionShieldWrapper(gymnasium.Wrapper):
             
             # Match the 5-tuple Gymnasium standard
             dummy_obs = self.env.observation_space.sample()
-            dummy_reward = 0.0  # Heavy penalty for breaking
+            dummy_reward = 0.0
             terminated = False
             truncated = True
             info = {"success": False, "error_caught": str(e)}
@@ -206,14 +197,14 @@ class TrainingProgressCallback(BaseCallback):
         self.episode_collisions = []
         self.episode_truncations = []
         self.episode_crashes_goal = []  
-        self.episode_lengths = []       # Added to track step sizes
+        self.episode_lengths = []
         
         # Memory tracking flags and baselines
         self.saved_5000_stats = False
         self.baseline_ram_mb = None
         self.baseline_vram_mb = None
         self.has_recorded_5000 = False  
-        self.current_lengths = None     # Array tracking live steps per environment
+        self.current_lengths = None
 
         # --- Restore from JSON if resuming ---
         if self.experiment_folder:
@@ -289,7 +280,7 @@ class TrainingProgressCallback(BaseCallback):
                         meta_data["periodic_tracking"][key_name] = entry_data
           
                 elif key_name == "latest":
-                    # Always update latest and history
+                    # Always update latest
                     meta_data["periodic_tracking"]["latest"] = entry_data
 
                 # Write atomically with temp file
@@ -381,7 +372,7 @@ class TrainingProgressCallback(BaseCallback):
                 vram_reserved = torch.cuda.memory_reserved() / (1024 ** 2)
                 vram_allocated_mb = torch.cuda.memory_allocated() / (1024 ** 2)
 
-            # --- FIXED: Only record 5000 stats ONCE and never again ---
+
             if not self.has_recorded_5000 and 4900 <= steps_done <= 5100:  
                 self.baseline_ram_mb = ram_mb
                 self.baseline_vram_mb = vram_allocated_mb
@@ -475,7 +466,7 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
             episode_collisions = []
             episode_truncations = []
             episode_crashes_goal = []
-            episode_lengths = []      # Track eval episode step distributions
+            episode_lengths = []
             
             obs = self.eval_env.reset()
             current_rewards = np.zeros(self.eval_env.num_envs)
@@ -612,8 +603,7 @@ class EvalAndSaveBestSuccessCallback(BaseCallback):
 
 class CheckpointWithVecNormalizeCallback(CheckpointCallback):
     def _on_step(self) -> bool:
-        # 1. Let the parent handle the standard "numbered" saves
-        result = super()._on_step() 
+        result = super()._on_step()
         
         if self.n_calls % self.save_freq == 0:
             # --- Paths ---
@@ -650,7 +640,7 @@ class TrainingSchedulerCallback(BaseCallback):
         self.algorithm_name = algorithm_name
         self.decay_rate = 0.9999
         self.episode_count = 0
-        self.session_steps = 0  # Track steps taken ONLY in this run snippet
+        self.session_steps = 0
 
     def _on_step(self) -> bool:
         self.session_steps += 1 # Increment every environment step execution
@@ -707,20 +697,21 @@ def main():
     parser.add_argument("--save-eval-maps", action=argparse.BooleanOptionalAction, default=SAVE_EVAL_MAPS)
 
     # Resume
-    parser.add_argument("--resume-folder", default=RESUME_FOLDER)
+    parser.add_argument("--run-folder-name", default=RUN_FOLDER_NAME)
     parser.add_argument("--checkpoint-name", default=CHECKPOINT_NAME)
 
     args = parser.parse_args()
+
+
+    resume_folder = SCRIPT_DIR / "models" / args.run_folder_name / "crash_checkpoints"
+
+    resume_folder = str(resume_folder)
 
     map_filename = "0004d52d1aeeb8ae6de39d6bd993e992.yaml" 
     map_path = os.path.join(MAP_DIR, map_filename)
     if not os.path.exists(map_path):
         print(f"Error: Map file {map_path} not found.")
         return
-
-    # ==========================================
-    # GPU CONFIGURATION
-    # ==========================================
 
     # Force CUDA if available, otherwise warn
     if torch.cuda.is_available():
@@ -730,22 +721,21 @@ def main():
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-        # Optional: Select specific GPU if you have multiple
-        # torch.cuda.set_device(0)  # Use GPU 0
+
         print(f"[GPU] Using CUDA device: {torch.cuda.get_device_name(0)}")
     else:
         DEVICE = "cpu"
         print("[WARNING] CUDA not available, falling back to CPU")
 
     # Set environment variables for GPU
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Use first GPU, or "" for CPU only
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     
     # Determine Experiment Folder logic
-    if args.resume_folder:
-        if os.path.basename(args.resume_folder) == "crash_checkpoints":
-            experiment_folder = os.path.dirname(args.resume_folder)
+    if resume_folder:
+        if os.path.basename(resume_folder) == "crash_checkpoints":
+            experiment_folder = os.path.dirname(resume_folder)
         else:
-            experiment_folder = args.resume_folder
+            experiment_folder = resume_folder
         
         print(f"\n[Resume] Resuming training. Main folder: {experiment_folder}")
 
@@ -753,7 +743,7 @@ def main():
         if os.path.exists(orig_meta_path):
             with open(orig_meta_path, "r") as f:
                 old_meta = json.load(f)
-                # Extract the seed safely from your JSON structure
+                # Extract the seed safely from JSON structure
                 initial_seed = int(old_meta["experiment_info"]["initial_seed"])
                 model_suffix = f"{args.algorithm}_{args.pf_active}_{initial_seed}"
             print(f"[Resume] Found original seed in metadata! Lock-in seed: {initial_seed}")
@@ -769,7 +759,7 @@ def main():
 
     
     # Dynamic variables tracking recovery states across loops
-    current_resume_folder = args.resume_folder
+    current_resume_folder = resume_folder
     current_checkpoint_name = args.checkpoint_name
     
     max_recovery_attempts = 20
@@ -784,14 +774,13 @@ def main():
         
         try:
 
-            eval_seed = 99999  # Static constant for perfect cross-run comparison
+            eval_seed = 99999  # Static constant for cross-run comparison
 
             
             env_crash_log = os.path.join(experiment_folder, "robot_env_crashes.txt")
 
            
             print(f"Initializing {args.num_envs} parallel evaluation environments...")
-            # Use a list comprehension to generate the environment initializers
 
             if USE_DUMMY_EVAL:
                 print(">>> Using DummyVecEnv for Evaluation (Sequential on Main Thread)")
@@ -803,7 +792,7 @@ def main():
             
             set_random_seed(initial_seed)
 
-            # Create the evaluation wrapper WITHOUT manually forcing obs_rms copies
+            # Create the evaluation wrapper
             eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False)
 
             # Set the global seeds for torch/numpy
@@ -855,9 +844,7 @@ def main():
                 print(f"[Resume] Peeking into {current_checkpoint_name}.zip to extract timestep offset...")
                 temp_model = AlgoClass.load(model_path, env=None, device="cpu") 
                 timesteps_completed = temp_model.num_timesteps
-                del temp_model  # Delete to immediately free up system RAM/VRAM
-            
-            # The exact, deterministic offset math
+                del temp_model
 
             current_seed = initial_seed + timesteps_completed
 
@@ -870,7 +857,7 @@ def main():
             # TRAINING ENV
             print(f"Initializing {args.num_envs} environments for {args.algorithm} (PF: {args.pf_active})...")
             
-            # ---> FIX applied here: Pass current_seed to the environment!
+
             env = SubprocVecEnv([make_env(map_path, args.pf_active, i, current_seed, env_crash_log, args.num_envs) for i in range(args.num_envs)])
             
             if current_resume_folder:
@@ -947,8 +934,6 @@ def main():
 
                 experiment_info = old_meta.get("experiment_info", {})
                 restart_history = experiment_info.get("restart_history", [])
-
-                # --- 3. LOGIC TO PREVENT DUPLICATES AND FIX TIMELINE ---
                 
                 # Check if this exact timestep is already the latest entry
                 if restart_history and isinstance(restart_history, list) and restart_history[-1].get("timesteps_at_restart") == timesteps_completed:
@@ -963,9 +948,7 @@ def main():
                         if entry.get("timesteps_at_restart", 0) < timesteps_completed
                     ]
 
-                    # --- 3B. Synchronize Snapshots (Dictionaries, NOT Lists) ---
-                    
-                    # 1. Periodic Tracking
+                    # Periodic Tracking
                     periodic_data = old_meta.get("periodic_tracking", {})
                     if not isinstance(periodic_data, dict): 
                         periodic_data = {}
@@ -986,12 +969,12 @@ def main():
                     periodic_data["latest"] = periodic_tracking_latest
                     periodic_data["first_5000_steps"] = periodic_tracking_first_5000
 
-                    # 2. Evaluation Stats (Best Model)
+                    # Evaluation Stats (Best Model)
                     evaluation_stats = old_meta.get("best_model_stats", {})
 
 
                 
-                    # --- 4. Append the new crash/restart information (This IS a list) ---
+                    # Append the new crash/restart information
                     restart_history.append({
                         "timestamp": str(np.datetime64('now')),
                         "timesteps_at_restart": timesteps_completed,
@@ -1000,7 +983,7 @@ def main():
                         "resumed_from_checkpoint": current_checkpoint_name
                     })
 
-                    # 5. Update and Save
+                    # Update and Save
                     old_meta["periodic_tracking"] = periodic_data
                     old_meta["best_model_stats"] = evaluation_stats
                     old_meta["restart_history"] = restart_history
@@ -1083,7 +1066,7 @@ def main():
                 }
             }
 
-            # Save Metadata (Appending a suffix if it's a resumed run to avoid overwriting original data)
+            # Save Metadata
             if current_resume_folder is None or recovery_count == -1:
                 meta_name = "metadata.json"
                 with open(os.path.join(experiment_folder, meta_name), "w") as f:
@@ -1095,8 +1078,6 @@ def main():
             print(f"\n[Metadata] Configuration saved to {os.path.join(experiment_folder, meta_name)}")
 
 
-
-            # Set reset_num_timesteps based on whether we are resuming or not
             # Calculate remaining timesteps
             if current_resume_folder:
                 # model.num_timesteps is automatically restored when loading the model in SB3
@@ -1118,7 +1099,7 @@ def main():
                 model.learn(total_timesteps=remaining_steps, callback=callback_list, reset_num_timesteps=do_reset_timesteps)
             else:
                 print("[Training] Total timesteps already reached. Exiting.")
-                break # Exit the recovery loop if we're already done
+                break
 
             # Save Final Model
             model.save(os.path.join(experiment_folder, f"model_final"))
@@ -1148,7 +1129,7 @@ def main():
             # Check if we hit the ceiling limit of maximum recovery allowances
             if recovery_count >= max_recovery_attempts:
                 print(f"[CRITICAL] Maximum recovery attempts ({max_recovery_attempts}) reached. Hard shutdown.")
-                sys.exit(1) # Note: The finally block WILL still run before sys.exit completes!
+                sys.exit(1)
             
             # Log crash details explicitly to file
             crash_log_file = os.path.join(experiment_folder, "irsim_auto_recovery_log.txt")
@@ -1177,20 +1158,16 @@ def main():
         except KeyboardInterrupt:
             # Safely catch Ctrl+C to prevent orphaned background processes
             print("\n[Manual Stop] KeyboardInterrupt detected. Safely aborting training loop...")
-            break # Exit the while loop and let the finally block clean up
+            break
 
         finally:
-            # ==========================================================
-            # THE GUARANTEED CLEANUP BLOCK
-            # Runs on Success, on Crash, on Ctrl+C, AND right before sys.exit()
-            # ==========================================================
             print("[Cleanup] Ensuring all simulation backends and workers are safely terminated...")
             try:
                 if env is not None:
                     print("          -> Terminating training subprocess workers...")
                     env.close() 
             except Exception as cleanup_error:
-                pass # Catch and ignore the broken pipe on close
+                pass
 
             try:
                 if eval_env is not None:

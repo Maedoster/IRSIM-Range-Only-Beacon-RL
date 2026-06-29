@@ -1,7 +1,6 @@
 import os
 import json
 import argparse
-import random
 import numpy as np
 
 from robot_env import RobotNavEnv
@@ -12,7 +11,7 @@ from stable_baselines3.common.utils import set_random_seed
 # ==========================================
 # CONFIGURATION
 # ==========================================
-EXPERIMENT_DIR_NAME = "run_SAC_True_20360_86%" 
+EXPERIMENT_DIR_NAME = "run_SAC_True_28076"
 MODEL_FILE_NAME = "best_model" 
 
 NUM_EPISODES = 50
@@ -57,7 +56,7 @@ def main():
 
     print("INITIAL SEED:", args.seed)
     
-    # 2. Create the Env ONE TIME
+    # 2. Create the Env
     def make_env():
         return RobotNavEnv(
             render=True, 
@@ -83,8 +82,7 @@ def main():
 
     print(f"Testing {AlgoClass.__name__} (PF={pf_active}) for {args.episodes} episodes...")
 
-    # RESET ONCE BEFORE THE LOOP
-    obs = env.reset() 
+    obs = env.reset()
     raw_env = venv.envs[0] 
     
     ep = 0
@@ -92,7 +90,6 @@ def main():
     print(f"\n--- Episode {ep+1} ---")
     print(f"Map: {raw_env.current_map_name}")
 
-    # Use a single while loop to manage the vectorized transitions smoothly
     while ep < args.episodes:
         
         action, _ = model.predict(obs, deterministic=True)
@@ -100,7 +97,7 @@ def main():
         
         total_reward += reward[0]
         
-        if dones[0]:  # Episode finished!
+        if dones[0]:  # Episode finished
             info = infos[0]
             result = "SUCCESS" if info.get('success') else "FAILED"
             print(f"Result: {result} | Total Reward: {total_reward:.2f} | Steps: {info.get('steps')} | Error: {info.get('target_error'):.2f}")
@@ -111,7 +108,6 @@ def main():
             # If there are more episodes left, prepare the print statement
             if ep < args.episodes:
                 print(f"\n--- Episode {ep+1} ---")
-                # Because VecEnv auto-resets, raw_env has already loaded the next map internally!
                 print(f"Map: {raw_env.current_map_name}")
 
     venv.close()

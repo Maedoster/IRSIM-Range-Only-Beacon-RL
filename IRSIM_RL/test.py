@@ -41,12 +41,12 @@ def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
      
         env = RobotNavEnv(
             render=False, 
-            pf_active=pf_active,       # Fixed: was PF_ACTIVE
+            pf_active=pf_active,
             seed=seed,
             is_eval=False,   
-            is_testing=True,   # Critical: set testing mode for proper map/seed handling
+            is_testing=True,
             worker_id=rank,            
-            num_eval_episodes= episodes, # Pass total episodes for proper seed distribution
+            num_eval_episodes= episodes,
         )
         return env
     return _init
@@ -91,7 +91,6 @@ def main():
         if os.path.exists(stats_path):
             print(f"Loading VecNormalize statistics from {stats_path}")
             env = VecNormalize.load(stats_path, venv)
-            # MUST disable updating during testing
             env.training = False
             env.norm_reward = False
         else:
@@ -116,7 +115,7 @@ def main():
         episode_steps = []
 
         while episodes_completed < args.num_episodes:
-            # Deterministic=True is standard for evaluation
+            # Deterministic=True
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, dones, infos = env.step(action)
             
@@ -173,7 +172,7 @@ def main():
         print(f"Average Reward : {mean_reward:.2f}")
         print(f"Average Steps  : {mean_steps:.1f}")
 
-        # --- NEW CODE: Save results to JSON ---
+        #Save results to JSON
         results_dict = {
             "total_episodes": args.num_episodes,
             "success_rate": success_rate,
@@ -201,7 +200,6 @@ def main():
         traceback.print_exc()
         
     finally:
-        # Guaranteed cleanup block matching your robust training setup
         print("[Cleanup] Shutting down environments safely...")
         try:
             if env is not None:
