@@ -60,16 +60,15 @@ def run_sim(world_data):
 
 
 def main():
-    # 1. Select map
+    #Select map
     map_path = choose_map()
     world_data = load_yaml(map_path)
 
-    # 2. Get robot start + goal
+    #Get robot start + goal
     start = get_position("Start")
     goal = get_goal()
 
-    # 3. Add robot dynamically
-# 3. Add robot dynamically 
+    #Add robot dynamically
     world_data["robot"] = [{
     "kinematics": {"name": "diff"},
     "shape": {"name": "circle", "radius": 0.2},
@@ -81,7 +80,6 @@ def main():
     "goal_threshold": 0.2,
     "behavior": {"name": "rvo"},
 
-    # ✅ Correct sensor definition
     "sensors": [
         {
             "type": "lidar2d",
@@ -97,7 +95,7 @@ def main():
         }
     ]
 }]
-    # 4. Run simulation
+    #Run simulation
     
     run_sim(world_data)
 
