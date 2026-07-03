@@ -34,7 +34,7 @@ from stable_baselines3.common.utils import set_random_seed
 # ==========================================
 
 SELECTED_ALGORITHM = "SAC"   # Options: "DDPG", "TD3", "PPO", "SAC"
-PF_ACTIVE = True            # Set to True for Particle Filter, False for Least Squares
+PF_ACTIVE = False            # Set to True for Particle Filter, False for Least Squares
 INITIAL_SEED = np.random.randint(0, 100000) #Or a specific one for reproducibility, e.g., 12345 
 #INITIAL_SEED = 12345
 
@@ -45,17 +45,17 @@ USE_DUMMY_EVAL = False  # Set to True to use DummyVecEnv for evaluation (single 
 NUM_EVAL_ENVS = 14  # Only relevant if USE_DUMMY_EVAL is False. Number of parallel environments for evaluation.
 
 TOTAL_TIMESTEPS = 3000000
-EVAL_EPISODES = 500
+EVAL_EPISODES = 300
 
-SAVE_FREQ = 20000  # Save every N environment steps (adjusted by number of envs in callbacks)
-EVAL_FREQ = 20000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
+SAVE_FREQ = 200000  # Save every N environment steps (adjusted by number of envs in callbacks)
+EVAL_FREQ = 30000   # Evaluate every N environment steps (adjusted by number of envs in callbacks)
 
 SAVE_EVAL_MAPS = False
 
 # --- Resume Settings ---
 # Set RESUME_FOLDER to None if starting a fresh run
 # Use a string for Windows path. Set to None to start fresh.
-RUN_FOLDER_NAME = "run_SAC_True_18615"
+RUN_FOLDER_NAME = None #"run_SAC_True_18615"
 CHECKPOINT_NAME = "last_checkpoint"
 
 # ==========================================
@@ -702,10 +702,12 @@ def main():
 
     args = parser.parse_args()
 
+    if args.run_folder_name is not None:
+        resume_folder = SCRIPT_DIR / "models" / args.run_folder_name / "crash_checkpoints"
 
-    resume_folder = SCRIPT_DIR / "models" / args.run_folder_name / "crash_checkpoints"
-
-    resume_folder = str(resume_folder)
+        resume_folder = str(resume_folder)
+    else:
+        resume_folder = None
 
     map_filename = "0004d52d1aeeb8ae6de39d6bd993e992.yaml" 
     map_path = os.path.join(MAP_DIR, map_filename)

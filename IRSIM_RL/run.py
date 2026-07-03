@@ -11,12 +11,12 @@ from stable_baselines3.common.utils import set_random_seed
 # ==========================================
 # CONFIGURATION
 # ==========================================
-EXPERIMENT_DIR_NAME = "run_SAC_True_28076"
+EXPERIMENT_DIR_NAME = "run_SAC_True_65807"
 MODEL_FILE_NAME = "best_model" 
 
 NUM_EPISODES = 50
 INITIAL_SEED = np.random.randint(0, 100000) # Or a specific one for reproducibility, e.g., 12345
-INITIAL_SEED = 12345
+#INITIAL_SEED = 12345
 
 # ==========================================
 # Helpers
@@ -32,6 +32,7 @@ def load_config(experiment_folder):
     
     algo_str = meta["experiment_info"]["algorithm"]
     pf_active = meta["experiment_info"]["pf_active"]
+    #pf_active = False #If you want to override and select LS or PF
     algo_map = {"SAC": SAC, "PPO": PPO, "TD3": TD3, "DDPG": DDPG}
     return algo_map[algo_str], pf_active
 

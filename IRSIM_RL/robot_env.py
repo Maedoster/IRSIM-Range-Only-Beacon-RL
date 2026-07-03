@@ -124,8 +124,8 @@ class RobotNavEnv(gym.Env):
         
         self.w_obstacle_front = 4.0 #before 10.0  
         self.w_obstacle_side = 1.5  #before 3.0    
-        self.safe_dist_front = 0.45 #Before 0.40
-        self.safe_dist_side = 0.35  #Before 0.30
+        self.safe_dist_front = 0.40 #Before 0.40
+        self.safe_dist_side = 0.30 #Before 0.30
 
         self.standoff_dist = 0.5
         self.standoff_margin = 0.15
@@ -192,7 +192,7 @@ class RobotNavEnv(gym.Env):
             #     if hasattr(self, '_grid_points') and len(self._grid_points) > 0:
             #         # Use a light purple ('violet') and small size (s=2) so it looks like a grid
             #         self.sim.draw_points(points=self._grid_points, c='grey', s=2)
-         
+
             # --- A* path ---
             if self.state == "FOLLOWING" and len(self.current_path) > 0:
                 path_points = self.current_path
@@ -217,12 +217,12 @@ class RobotNavEnv(gym.Env):
                 if hasattr(self.target_tracker, 'eastingpoints_LS'):
                     ex = self.target_tracker.eastingpoints_LS
                     ey = self.target_tracker.northingpoints_LS
-                    
+
                     if len(ex) > 0:
                         # Ensure we are passing float values, not numpy types
                         obs_points = [[float(x), float(y)] for x, y in zip(ex, ey)]
                         self.sim.draw_points(points=obs_points, c='cyan', s=5)
-                    
+
 
             # PARTICLES
             if self.pf_active:
@@ -1091,25 +1091,25 @@ class RobotNavEnv(gym.Env):
                 self.nav_goal = self.estimated_goal.copy()
 
         else: # LS MODE
-            self.target_tracker.updateLS(dt=0.1, new_range=True, z=dist_z, myobserver=robot_pos_pf)
+            if self.state == "SEARCHING":
+                # Only collect data and update the LS solver while actively hunting for the target
+                self.target_tracker.updateLS(dt=0.1, new_range=True, z=dist_z, myobserver=robot_pos_pf)
 
-            if len(self.target_tracker.lsxs) > 0:
-                new_ls_estimate = np.array([self.target_tracker.lsxs[-1][0], self.target_tracker.lsxs[-1][2]])
+                if len(self.target_tracker.lsxs) > 0:
+                    new_ls_estimate = np.array([self.target_tracker.lsxs[-1][0], self.target_tracker.lsxs[-1][2]])
 
-                if self.state == "SEARCHING":
                     num_points = len(self.target_tracker.eastingpoints_LS)
                     self.estimated_goal_ls = new_ls_estimate
                     self.nav_goal = self.estimated_goal_ls.copy()
 
-                    # Added cooldown check to LS mode to prevent CPU throttling
+                    # Cooldown check to prevent CPU throttling
                     if num_points >= 5 and self.astar_cooldown == 0:
-
                         if self.is_valid_pos(self.estimated_goal_ls[0], self.estimated_goal_ls[1]):
                             path = self.get_astar_path(robot_state[:2, 0], self.estimated_goal_ls)
 
                             if path is not None:
                                 if len(path) > 1:
-                                    # --- SUCCESS: Path found! No cooldown needed ---
+                                    # --- SUCCESS: Path found! ---
                                     sparse_path = self.prune_path_to_sparse(path)
                                     pruned_path = []
                                     for wp in sparse_path:
@@ -1126,7 +1126,6 @@ class RobotNavEnv(gym.Env):
                                         self.state = "FOLLOWING"
                                     else:
                                         self.state = "DOCKING"
-
                                 else:
                                     # Path is too short to be useful, go straight to docking
                                     self.state = "DOCKING"
@@ -1140,36 +1139,24 @@ class RobotNavEnv(gym.Env):
                             self.astar_cooldown = 60
                             self.state = "SEARCHING"
 
-                elif self.state == "FOLLOWING":
-                    ls_drift = np.linalg.norm(new_ls_estimate - self.estimated_goal_ls)
-                    dist_to_path_end = np.linalg.norm(new_ls_estimate - self.current_path[-1])
+            elif self.state == "FOLLOWING":
+                # Freeze LS updates during travel. Use the last known estimated_goal_ls.
+                target_wp = self.current_path[self.waypoint_index]
+                dist_to_wp = np.linalg.norm(robot_state[:2, 0] - target_wp)
 
-                    # LS-specific safety check: if estimate jumps drastically, recalculate path
-                    if ls_drift > 1.0 or dist_to_path_end > 1.5:
-                        print("LS Estimate Jumped! Reverting to SEARCHING.")
-                        self.state = "SEARCHING"
-                        self.current_path = []
-                        self.estimated_goal_ls = new_ls_estimate
-                        self.nav_goal = self.estimated_goal_ls.copy()
+                if dist_to_wp < 0.5:
+                    if self.waypoint_index < len(self.current_path) - 1:
+                        self.waypoint_index += 1
+                        self.nav_goal = np.array(self.current_path[self.waypoint_index])
+                        self.prev_dist = np.linalg.norm(robot_state[:2, 0] - self.nav_goal)
                     else:
-                        target_wp = self.current_path[self.waypoint_index]
-                        dist_to_wp = np.linalg.norm(robot_state[:2, 0] - target_wp)
+                        self.state = "DOCKING"
+                        self.nav_goal = self.estimated_goal_ls.copy()
+                        self.current_path = []
 
-                        if dist_to_wp < 0.5:
-                            if self.waypoint_index < len(self.current_path) - 1:
-                                self.waypoint_index += 1
-                                self.nav_goal = np.array(self.current_path[self.waypoint_index])
-                                self.prev_dist = np.linalg.norm(robot_state[:2, 0] - self.nav_goal)
-                            else:
-                                self.state = "DOCKING"
-                                self.nav_goal = new_ls_estimate.copy()
-                                self.current_path = []
-
-                        # Update the baseline estimate for the next iteration's drift calculation
-                        self.estimated_goal_ls = new_ls_estimate
-
-                elif self.state == "DOCKING":
-                    self.nav_goal = new_ls_estimate.copy()
+            elif self.state == "DOCKING":
+                # Keep driving to the frozen final estimate
+                self.nav_goal = self.estimated_goal_ls.copy()
 
         # Handle tracking on the very first frame
         if getattr(self, 'first_step', True):
