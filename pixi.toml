@@ -15,6 +15,7 @@ run = "python IRSIM_RL/run.py"
 convert = "python HouseExpo_IRSim_Converter/Convert.py"
 occupancy = "python HouseExpo_IRSim_Converter/ValidSpacesMapsConverter.py"
 split = "python HouseExpo_IRSim_Converter/Eval_Test_Split.py"
+tensorboard = "python -m tensorboard.main --logdir=."
 
 [dependencies]
 python = "3.10.20.*"

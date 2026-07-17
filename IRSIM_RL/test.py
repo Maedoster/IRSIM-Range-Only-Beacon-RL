@@ -11,6 +11,9 @@ from stable_baselines3 import SAC, PPO, TD3, DDPG
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from stable_baselines3.common.utils import set_random_seed
 
+# Import TensorBoard SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+
 # ==========================================
 # Helpers
 # ==========================================
@@ -22,30 +25,29 @@ def load_config(experiment_folder):
     meta_path = os.path.join(experiment_folder, "metadata.json")
     if not os.path.exists(meta_path):
         raise FileNotFoundError(f"Cannot find metadata.json at {meta_path}")
-        
+
     with open(meta_path, "r") as f:
         meta = json.load(f)
-    
+
     algo_str = meta["experiment_info"]["algorithm"]
     pf_active = meta["experiment_info"]["pf_active"]
     algo_map = {"SAC": SAC, "PPO": PPO, "TD3": TD3, "DDPG": DDPG}
-    
+
     if algo_str not in algo_map:
         raise ValueError(f"Unsupported algorithm found in config: {algo_str}")
-        
+
     return algo_map[algo_str], pf_active
 
 def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
     """Utility to instantiate parallel environments safely."""
     def _init():
-     
         env = RobotNavEnv(
-            render=False, 
+            render=False,
             pf_active=pf_active,
             seed=seed,
-            is_eval=False,   
+            is_eval=False,
             is_testing=True,
-            worker_id=rank,            
+            worker_id=rank,
             num_eval_episodes= episodes,
         )
         return env
@@ -56,11 +58,11 @@ def make_test_env(pf_active, rank, seed=0, render=False, episodes = 100):
 # ==========================================
 def main():
     parser = argparse.ArgumentParser(description="Parallel RL Testing Script")
-    parser.add_argument('--experiment-dir', type=str, default="run_SAC_True_65807", help="Name of the experiment folder inside 'models/'")
+    parser.add_argument('--experiment-dir', type=str, default="run_PPO_False_1", help="Name of the experiment folder inside 'models/'")
     parser.add_argument('--model-name', type=str, default="best_model", help="Name of the saved model zip/pkl (without extension)")
     parser.add_argument('--num-episodes', type=int, default=1000, help="Total number of episodes to test")
     parser.add_argument('--num-envs', type=int, default=14, help="Number of parallel environments to run")
-    parser.add_argument('--seed', type=int, default=3, help="Base random seed for reproducibility")
+    parser.add_argument('--seed', type=int, default=1, help="Base random seed for reproducibility")
     parser.add_argument('--render', action='store_true', help="Enable rendering (will only render worker 0 to prevent crashes)")
     args = parser.parse_args()
 
@@ -78,13 +80,19 @@ def main():
 
     # 1. Detect Algorithm and PF status
     AlgoClass, pf_active = load_config(experiment_dir)
-    
+
     env = None
+    tb_writer = None
     try:
+        # Initialize TensorBoard Writer
+        tb_log_dir = os.path.join(experiment_dir, "tb_test_logs")
+        print(f"Initializing TensorBoard logging directory at: {tb_log_dir}")
+        tb_writer = SummaryWriter(log_dir=tb_log_dir)
+
         # 2. Create the Parallel Environments
         print("Initializing parallel environments...")
         venv = SubprocVecEnv([make_test_env(pf_active, i, args.seed, args.render, args.num_episodes) for i in range(args.num_envs)])
-        
+
         set_random_seed(args.seed)
 
         # 3. Handle Normalization (CRITICAL for test accuracy)
@@ -103,7 +111,7 @@ def main():
 
         # 5. Parallel Testing Loop
         print(f"\nTesting {AlgoClass.__name__} (PF={pf_active}) across {args.num_envs} workers...")
-        
+
         obs = env.reset()
         episodes_completed = 0
         successful_episodes = 0
@@ -113,22 +121,24 @@ def main():
 
         episode_rewards = []
         episode_steps = []
+        episode_errors = []
 
         while episodes_completed < args.num_episodes:
             # Deterministic=True
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, dones, infos = env.step(action)
-            
+
             for i, done in enumerate(dones):
                 if done:
                     info = infos[i]
-                    
+
                     # Accumulate stats
                     episodes_completed += 1
                     is_success = info.get('success', False)
                     is_collision = info.get('collision', False)
                     is_timeout = info.get("TimeLimit.truncated", False)
                     is_collision_goal = info.get('goal_crash', False)
+
                     if is_success:
                         successful_episodes += 1
                     if is_collision:
@@ -137,18 +147,38 @@ def main():
                         timeout_episodes += 1
                     if is_collision_goal:
                         collision_goal_episodes += 1
-                    # 'episode' dict is populated by SB3 Monitor/VecEnv when an episode finishes
-                    
+
                     ep_reward = info['reward']
                     ep_length = info['steps']
+                    ep_error = info['target_error']
+
                     episode_rewards.append(ep_reward)
                     episode_steps.append(ep_length)
-                    
+                    episode_errors.append(ep_error)
+
+                    # --- Compute Running Evaluation Rates (%) ---
+                    running_success_rate = (successful_episodes / episodes_completed) * 100.0
+                    running_collision_rate = (collision_episodes / episodes_completed) * 100.0
+                    running_timeout_rate = (timeout_episodes / episodes_completed) * 100.0
+                    running_collision_goal_rate = (collision_goal_episodes / episodes_completed) * 100.0
+
+                    # --- Log to TensorBoard ---
+                    # Group 1: Continuous Individual Episodic Signals
+                    tb_writer.add_scalar("Episode/Reward", ep_reward, episodes_completed)
+                    tb_writer.add_scalar("Episode/Steps", ep_length, episodes_completed)
+                    tb_writer.add_scalar("Episode/Target_Error", ep_error, episodes_completed)
+
+                    # Group 2: Running Performance Distributions (Rates)
+                    tb_writer.add_scalar("Rates/Success_Rate", running_success_rate, episodes_completed)
+                    tb_writer.add_scalar("Rates/Collision_Rate", running_collision_rate, episodes_completed)
+                    tb_writer.add_scalar("Rates/Timeout_Rate", running_timeout_rate, episodes_completed)
+                    tb_writer.add_scalar("Rates/Collision_Goal_Rate", running_collision_goal_rate, episodes_completed)
+
                     result_str = "SUCCESS" if is_success else "COLLISION_GOAL" if is_collision_goal else "COLLISION" if is_collision else "TIMEOUT" if is_timeout else "UNKNOWN"
                     target_error = info.get('target_error', 0.0)
-                    
+
                     print(f"Worker {i:02d} | Ep {episodes_completed:03d}/{args.num_episodes:03d} | "
-                          f"Result: {result_str} | Error: {target_error:.2f}m")
+                          f"Result: {result_str} | Error: {target_error:.2f}m | Running Success: {running_success_rate:.1f}%")
 
                     if episodes_completed >= args.num_episodes:
                         break # Break out of the for-loop if we hit the target
@@ -163,7 +193,8 @@ def main():
         collision_goal_rate = (collision_goal_episodes / args.num_episodes) * 100
         mean_reward = np.mean(episode_rewards) if episode_rewards else 0.0
         mean_steps = np.mean(episode_steps) if episode_steps else 0.0
-        
+        mean_error = np.mean(episode_errors) if episode_errors else 0.0
+
         print(f"Total Episodes : {args.num_episodes}")
         print(f"Success Rate   : {success_rate:.2f}% ({successful_episodes}/{args.num_episodes})")
         print(f"Collision Rate : {collision_rate:.2f}% ({collision_episodes}/{args.num_episodes})")
@@ -171,8 +202,9 @@ def main():
         print(f"Collision Goal Rate : {collision_goal_rate:.2f}% ({collision_goal_episodes}/{args.num_episodes})")
         print(f"Average Reward : {mean_reward:.2f}")
         print(f"Average Steps  : {mean_steps:.1f}")
+        print(f"Average Error  : {mean_error:.1f}")
 
-        #Save results to JSON
+        # Save results to JSON
         results_dict = {
             "total_episodes": args.num_episodes,
             "success_rate": success_rate,
@@ -181,16 +213,17 @@ def main():
             "collision_goal_rate": collision_goal_rate,
             "mean_reward": float(mean_reward),
             "mean_steps": float(mean_steps),
+            "mean_error": float(mean_error),
             "successful_episodes": successful_episodes,
             "collision_episodes": collision_episodes,
             "timeout_episodes": timeout_episodes,
             "collision_goal_episodes": collision_goal_episodes
         }
-        
+
         results_file_path = os.path.join(experiment_dir, "test_results.json")
         with open(results_file_path, "w") as f:
             json.dump(results_dict, f, indent=4)
-            
+
         print(f"\nResults successfully saved to: {results_file_path}")
         print("="*50 + "\n")
 
@@ -198,9 +231,17 @@ def main():
         print("\n[CRITICAL ERROR] Testing interrupted!")
         print(f"Exception details: {e}")
         traceback.print_exc()
-        
+
     finally:
         print("[Cleanup] Shutting down environments safely...")
+        # Ensure TensorBoard writer logs are flushed and closed properly
+        if tb_writer is not None:
+            try:
+                tb_writer.flush()
+                tb_writer.close()
+                print("[Cleanup] TensorBoard logger safely closed.")
+            except Exception:
+                pass
         try:
             if env is not None:
                 env.close()

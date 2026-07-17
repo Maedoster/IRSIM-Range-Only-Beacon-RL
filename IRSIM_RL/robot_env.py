@@ -741,25 +741,41 @@ class RobotNavEnv(gym.Env):
             self.done = True
 
         elif is_final_stage:
-            # Check Standoff Criteria
-            at_standoff = abs(dist_ghost - self.standoff_dist) <= self.standoff_margin
-            facing_goal = abs(diff_rad_norm) <= self.heading_margin
+            # --- GROUND TRUTH TERMINATION EVALUATION ---
+            # Fetch actual kinematic position to verify metrics against the REAL target
+            robot_state = self.sim.get_robot_state()
+            robot_pos = np.array([robot_state[0, 0], robot_state[1, 0]])
 
-            # Remove the action checks and terminate strictly on position
-            if at_standoff and facing_goal:
-                total_rew += self.goal_reward  
+            # 1. Calculate ground-truth distance to real target
+            dist_real = np.linalg.norm(robot_pos - real_goal)
+
+            # 2. Calculate ground-truth angular heading relative to real target
+            real_goal_vector = np.array([real_goal[0] - robot_pos[0], real_goal[1] - robot_pos[1]])
+            norm_pose = np.array([np.cos(robot_state[2, 0]), np.sin(robot_state[2, 0])])
+            norm_real_goal = real_goal_vector / (dist_real + 1e-6)
+
+            cos_real = np.dot(norm_pose, norm_real_goal)
+            sin_real = np.cross(norm_pose, norm_real_goal)
+            diff_rad_real = np.arctan2(sin_real, cos_real)
+            diff_rad_real_norm = (diff_rad_real + np.pi) % (2 * np.pi) - np.pi
+
+            # Check Standoff Criteria strictly matching real world coordinates
+            at_standoff = abs(dist_real - self.standoff_dist) <= self.standoff_margin
+            facing_real_goal = abs(diff_rad_real_norm) <= self.heading_margin
+
+            if at_standoff and facing_real_goal:
+                total_rew += self.goal_reward
                 self.success = True
                 self.done = True
-                
-            elif dist_ghost < (self.standoff_dist - self.standoff_margin):
-                # Penalty for breaching the standoff zone (getting too close)
-                # This prevents it from accidentally ramming the target
+
+            elif dist_real < (self.standoff_dist - self.standoff_margin):
+                # Penalty for breaching the true standoff zone (encroaching or target ramming)
                 total_rew += self.collision_goal_penalty
                 self.crashed_into_goal = True
                 self.done = True
 
         elif not is_final_stage and dist_ghost < 0.5:
-            total_rew += self.waypoint_reward  
+            total_rew += self.waypoint_reward
 
         self.accumulated_episode_reward += total_rew
         return total_rew
