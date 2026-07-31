@@ -169,6 +169,8 @@ pixi run run
 
 This work was conducted as part of a Master's Thesis program in collaboration with the University of Bologna and the University of Bielefeld.
 
+    RL for Active Beacon Localization
+
     Author: Edoardo
 
     First Reviewer: RA Jesus E. Aleman G.
