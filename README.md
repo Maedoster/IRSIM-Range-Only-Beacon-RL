@@ -81,13 +81,13 @@ pixi run convert
 ```
 
 ```bash
-# 2. Split dataset into training, validation, and testing splits
-pixi run split
+# 2. Generate occupancy grids required for path planning & state estimation
+pixi run occupancy
 ```
 
 ```bash
-# 3. Generate occupancy grids required for path planning & state estimation
-pixi run occupancy
+# 3. Split dataset into training, validation, and testing splits
+pixi run split
 ```
 
 ## 🚀 Training & Evaluation
@@ -114,3 +114,17 @@ pixi run test
 # Render live trajectory execution in IR-Sim
 pixi run run
 ```
+
+## 🎓 Academic Context
+
+This work was conducted as part of a Master's Thesis program in collaboration with the University of Bologna and the University of Bielefeld.
+
+    Author: Edoardo
+
+    First Reviewer: RA Jesus E. Aleman G.
+
+    Second Reviewers: PD Dr.-Ing. Sven Wachsmuth, Prof. Simone Martini
+
+## 📜 License
+
+This repository is released under the MIT License.
