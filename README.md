@@ -1,4 +1,4 @@
-<img width="195" height="173" alt="DemoPF" src="https://github.com/user-attachments/assets/5004511a-40be-4a86-ab48-4dc70046bcad" />
+
 # Autonomous Robot Navigation via Deep Reinforcement Learning with State Estimation
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -26,7 +26,7 @@ Autonomous navigation in sparse-sensor environments requires robust state estima
 
 ## 🎬 Demo & Trajectory Execution
 
-<img width="600" alt="DemoPF" src="https://github.com/user-attachments/assets/456344f9-b23e-4ae4-87d6-a56b2d82a4eb" />
+<img width="600"  alt="demoPF" src="https://github.com/user-attachments/assets/f774fbfd-0895-438d-a484-bf1f566a5aa7" />
 
 ## 🏗️ System Architecture
 
@@ -133,3 +133,40 @@ This work was conducted as part of a Master's Thesis program in collaboration wi
 ## 📜 License
 
 This repository is released under the MIT License.
+
+## 🚀 Training & Evaluation
+
+### 1. Training Arguments (`pixi run train`)
+
+The training script supports several CLI arguments to configure the algorithm, state estimation backend, parallelism, and evaluation checkpoints:
+
+| Category | Flag | Type / Choices | Description |
+| :--- | :--- | :--- | :--- |
+| **General** | `--algorithm` | `DDPG`, `TD3`, `PPO`, `SAC` | RL policy architecture to train |
+| | `--pf-active` / `--no-pf-active` | `bool` | Enable/disable Particle Filter state estimation |
+| | `--seed` | `int` | Random seed for reproducibility |
+| **Training** | `--num-envs` | `int` | Number of parallel Gym vector environments |
+| | `--total-timesteps` | `int` | Total environment interaction steps |
+| | `--eval-episodes` | `int` | Number of episodes per evaluation cycle |
+| | `--save-freq` | `int` | Frequency (in steps) to save model checkpoints |
+| | `--eval-freq` | `int` | Frequency (in steps) to trigger evaluation |
+| **Evaluation** | `--use-dummy-eval` / `--no-use-dummy-eval` | `bool` | Use single DummyVecEnv vs SubprocVecEnv during eval |
+| | `--num-eval-envs` | `int` | Number of parallel evaluation environments |
+| | `--save-eval-maps` | `bool` | Save visual trajectory maps generated during eval |
+| **Resume** | `--run-folder-name` | `str` | Subfolder name under `Best_Models/` to resume |
+| | `--checkpoint-name` | `str` | Specific `.zip` checkpoint file to resume training |
+
+---
+
+### 2. Common Command Examples
+
+#### Training
+```bash
+# Standard SAC training run with Particle Filter enabled
+pixi run train --algorithm SAC --pf-active --total-timesteps 500000
+
+# Train TD3 without Particle Filter
+pixi run train --algorithm TD3 --no-pf-active --seed 42
+
+# Resume training from a specific checkpoint
+pixi run train --run-folder-name run_SAC_True_1 --checkpoint-name rl_model_100000_steps.zip
