@@ -57,34 +57,39 @@ The figure below outlines the modular design of the system architecture, illustr
             | (Observation, Reward)           ^ (Action)
             v                                 |
 +--------------------------------------------------------------+
+| Stable-Baselines3 Agent                                      |
++--------------------------------------------------------------+
 ```
 
 
-⚙️ Installation & Setup
+## ⚙️ Installation & Setup
 
-This project uses Pixi for environment and task management.
-1. Clone the Repository
-Bash
+This project uses **[Pixi](https://pixi.sh)** for environment and task management.
 
-git clone https://github.com/Maedoster/IRSIM-Range-Only-Beacon-RL.git
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/Maedoster/IRSIM-Range-Only-Beacon-RL.git](https://github.com/Maedoster/IRSIM-Range-Only-Beacon-RL.git)
 cd IRSIM-Range-Only-Beacon-RL
-
-2. Preprocessing Data Pipeline
+```
+### 2. Preprocessing Data Pipeline
 
 Run the preprocessing tasks sequentially to parse layouts, split datasets, and extract occupancy grids:
-Bash
 
 # 1. Convert raw dataset layouts into IR-Sim compatible formats
+```bash
 pixi run convert
-
+```
 # 2. Split dataset into training, validation, and testing splits
+```bash
 pixi run split
-
+```
 # 3. Generate occupancy grids required for path planning & state estimation
+```bash
 pixi run occupancy
+```
 
-🚀 Training & Evaluation
-1. Training the Agent
+## 🚀 Training & Evaluation
+### 1. Training the Agent
 
 Launch the Deep RL training loop:
 Bash
@@ -96,7 +101,7 @@ Bash
 
 pixi run tensorboard
 
-2. Evaluating & Running Models
+### 2. Evaluating & Running Models
 
 Ensure your target model checkpoint is inside Best_Models/, then run:
 Bash
@@ -106,31 +111,3 @@ pixi run test
 
 # Render live trajectory execution in IR-Sim
 pixi run run
-
-📂 Repository Structure
-Plaintext
-
-├── Best_Models/            # Saved policy weights and evaluation logs
-├── datasets/               # Preprocessed HouseExpo layout files for IR-Sim
-├── envs/                   # Custom Gymnasium wrapper & observation space definitions
-├── state_estimation/       # Particle Filter (PF) and Least-Squares (LS) backends
-├── utils/                  # Dataset parsers, metrics loggers, and plotting scripts
-├── train.py                # Main script for policy training
-├── evaluate.py             # Policy evaluation and trajectory rendering
-└── README.md               # Project documentation
-
-🎓 Academic Context
-
-This work was conducted as part of a Master's Thesis program in collaboration with the University of Bologna and the University of Bielefeld.
-
-    Author: Edoardo
-
-    First Reviewer: RA Jesus E. Aleman G.
-
-    Second Reviewers: PD Dr.-Ing. Sven Wachsmuth, Prof. Simone Martini
-
-📜 License
-
-This repository is released under the MIT License.
-| Stable-Baselines3 Agent                                      |
-+--------------------------------------------------------------+
