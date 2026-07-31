@@ -57,7 +57,7 @@ The figure below outlines the modular design of the system architecture, illustr
             | (Observation, Reward)           ^ (Action)
             v                                 |
 +--------------------------------------------------------------+
-```text
+```
 
 
 ⚙️ Installation & Setup
