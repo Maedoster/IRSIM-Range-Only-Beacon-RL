@@ -104,41 +104,9 @@ pixi run split
 pixi run train
 ```
 
-```bash
-# Monitor training curves and evaluation metrics in real time:
-pixi run tensorboard
-```
-### 2. Evaluating & Running Models
+#### Training Arguments (`pixi run train`)
 
-Ensure your target model checkpoint is inside the best_model/ folder in the trained models or a custom folder/, then run:
-```bash
-# Evaluate policy performance across test environments
-pixi run test
-```
-```bash
-# Render live trajectory execution in IR-Sim
-pixi run run
-```
-
-## 🎓 Academic Context
-
-This work was conducted as part of a Master's Thesis program in collaboration with the University of Bologna and the University of Bielefeld.
-
-    Author: Edoardo
-
-    First Reviewer: RA Jesus E. Aleman G.
-
-    Second Reviewers: PD Dr.-Ing. Sven Wachsmuth, Prof. Simone Martini
-
-## 📜 License
-
-This repository is released under the MIT License.
-
-## 🚀 Training & Evaluation
-
-### 1. Training Arguments (`pixi run train`)
-
-The training script supports several CLI arguments to configure the algorithm, state estimation backend, parallelism, and evaluation checkpoints:
+The training script supports several CLI arguments to configure the algorithm, state estimation backend, parallelism, and evaluation checkpoints (These can also be changed directly though the code):
 
 | Category | Flag | Type / Choices | Description |
 | :--- | :--- | :--- | :--- |
@@ -158,15 +126,61 @@ The training script supports several CLI arguments to configure the algorithm, s
 
 ---
 
-### 2. Common Command Examples
-
-#### Training
 ```bash
-# Standard SAC training run with Particle Filter enabled
-pixi run train --algorithm SAC --pf-active --total-timesteps 500000
+# Monitor training curves and evaluation metrics in real time:
+pixi run tensorboard
+```
+### 2. Evaluating & Running Models
 
-# Train TD3 without Particle Filter
-pixi run train --algorithm TD3 --no-pf-active --seed 42
+Ensure your target model checkpoint is inside the best_model/ folder in the trained models or a custom folder/, then run:
+```bash
+# Evaluate policy performance across test environments
+pixi run test
+```
+#### Testing CLI Arguments (`pixi run test`)
 
-# Resume training from a specific checkpoint
-pixi run train --run-folder-name run_SAC_True_1 --checkpoint-name rl_model_100000_steps.zip
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--experiment-dir` | `str` | `run_DDPG_True_1` | Experiment subfolder name inside `Best_Models/` |
+| `--model-name` | `str` | `best_model` | Model file name without extension (`.zip` / `.pkl`) |
+| `--num-episodes` | `int` | `1000` | Total number of test episodes to execute |
+| `--num-envs` | `int` | `14` | Number of parallel worker environments |
+| `--seed` | `int` | `1` | Base random seed for reproducibility |
+| `--render` | `flag` | `False` | Enable rendering (renders worker 0 only to prevent UI crashes) |
+
+---
+
+```bash
+# Render live trajectory execution in IR-Sim
+pixi run run
+```
+
+#### Interactive Trajectory Execution Arguments (`pixi run run`)
+| Flag | Type | Description |
+| :--- | :--- | :--- |
+| `--experiment` | `str` | Experiment subfolder name inside `Best_Models/` |
+| `--model` | `str` | Target model file name without extension |
+| `--episodes` | `int` | Total number of episodes to render |
+| `--seed` | `int` | Initial random seed |
+
+---
+
+## 🎓 Academic Context
+
+This work was conducted as part of a Master's Thesis program in collaboration with the University of Bologna and the University of Bielefeld.
+
+    Author: Edoardo
+
+    First Reviewer: RA Jesus E. Aleman G.
+
+    Second Reviewers: PD Dr.-Ing. Sven Wachsmuth, Prof. Simone Martini
+
+## 📜 License
+
+This repository is released under the MIT License.
+
+## 🚀 Training & Evaluation
+
+
+
+
