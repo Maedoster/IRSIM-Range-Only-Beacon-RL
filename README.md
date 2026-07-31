@@ -179,7 +179,7 @@ This work was conducted as part of a Master's Thesis program in collaboration wi
 
 This repository is released under the MIT License.
 
-## 🚀 Training & Evaluation
+
 
 
 
