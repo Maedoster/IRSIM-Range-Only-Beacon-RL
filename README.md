@@ -26,7 +26,7 @@ Autonomous navigation in sparse-sensor environments requires robust state estima
 
 ## 🎬 Demo & Trajectory Execution
 
-<img width="195" height="173" alt="DemoPF" src="https://github.com/user-attachments/assets/456344f9-b23e-4ae4-87d6-a56b2d82a4eb" />
+<img width="600" alt="DemoPF" src="https://github.com/user-attachments/assets/456344f9-b23e-4ae4-87d6-a56b2d82a4eb" />
 
 ## 🏗️ System Architecture
 
