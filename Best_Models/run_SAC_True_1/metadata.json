@@ -1,0 +1,160 @@
+{
+    "experiment_info": {
+        "algorithm": "SAC",
+        "pf_active": true,
+        "initial_seed": 1,
+        "current_seed": 1,
+        "total_timesteps": 3000000,
+        "num_envs": 7,
+        "num_eval_envs": 7,
+        "status": "started",
+        "restarts": -1,
+        "start_time": "2026-07-17T15:01:48",
+        "resumed_from": null
+    },
+    "restart_history": [],
+    "periodic_tracking": {
+        "first_5000_steps": {
+            "step": 4998,
+            "num_episodes": 54,
+            "avg_episode_length": 72.63,
+            "success_rate(%)": 0.0,
+            "collision_rate(%)": 100.0,
+            "collision_goal_rate(%)": 0.0,
+            "truncated_rate(%)": 0.0,
+            "ram_mb": 9113.54,
+            "vram_mb": 2.83,
+            "timestamp": "2026-07-17 17:02:46"
+        },
+        "latest": {
+            "step": 2998800,
+            "num_episodes": 35,
+            "avg_episode_length": 145.26,
+            "success_rate(%)": 88.57,
+            "collision_rate(%)": 5.71,
+            "collision_goal_rate(%)": 5.71,
+            "truncated_rate(%)": 0.0,
+            "ram_mb": 11032.45,
+            "vram_mb": 25.18,
+            "timestamp": "2026-07-19 15:31:29"
+        }
+    },
+    "best_model_stats": {
+        "best_success_rate(%)": 86.0,
+        "associated_collision_rate(%)": 8.0,
+        "associated_goal_crash_rate(%)": 3.0,
+        "associated_truncated_rate(%)": 3.0,
+        "best_mean_reward": 10.659537938431512,
+        "timesteps_achieved": 2669555,
+        "num_episodes": 300,
+        "avg_episode_length": 249.53
+    },
+    "system_info": {
+        "sb3_version": "2.7.1",
+        "torch_version": "2.11.0",
+        "device": "cuda",
+        "os": "Linux",
+        "os_version": "#23-Ubuntu SMP PREEMPT_DYNAMIC Fri May  8 06:02:38 UTC 2026",
+        "python_version": "3.10.20"
+    },
+    "environment_config": {
+        "map_file": "Full Dataset from HouseExpo_IRSim_Converter/IRSimDataset",
+        "max_steps": 1500
+    },
+    "robot_env_stats": {
+        "uncertainty_threshold": 0.1,
+        "max_steps": 1500,
+        "state_dimension": 60,
+        "action_space_low": [
+            0.0,
+            -1.2000000476837158
+        ],
+        "action_space_high": [
+            0.6000000238418579,
+            1.2000000476837158
+        ],
+        "A* max nodes": 100000,
+        "dt": 0.1
+    },
+    "hyperparameters": {
+        "learning_rate": 0.0003,
+        "gamma": 0.99,
+        "batch_size": 256,
+        "verbose": 1,
+        "seed": 1,
+        "device": "cuda",
+        "buffer_size": 300000,
+        "learning_starts": 10000,
+        "tau": 0.01,
+        "train_freq": [
+            1,
+            "TrainFrequencyUnit.STEP"
+        ],
+        "gradient_steps": 1,
+        "n_steps": 1,
+        "ent_coef": "auto",
+        "target_entropy": -2.0
+    },
+    "robot_goal_settings": {
+        "physical_limits": {
+            "radius": 0.15,
+            "goal_threshold": 0.2,
+            "max_vel_yaml": [
+                0.6,
+                1.2
+            ],
+            "kinematics": "diff"
+        },
+        "sensor_lidar": {
+            "range_max": 7,
+            "beams": 100,
+            "noise_std": 0.05,
+            "offset": [
+                0,
+                0,
+                0
+            ]
+        }
+    },
+    "reward_structure": {
+        "reward_type": "hybrid_switching_state_machine",
+        "sparse_rewards": {
+            "waypoints": 1.0,
+            "goal": 15.0
+        },
+        "sparse_penalties": {
+            "collision": -15,
+            "goal_collision": -10,
+            "truncation": -10
+        },
+        "dense_rewards": {
+            "progress_formula": "progress = (self.prev_dist - dist_ghost) * self.w_progress",
+            "progress_multiplier": 2.0
+        },
+        "dense_penalties": {
+            "time_step": -0.005,
+            "safe_distance_front_formula": "front_penalty = -self.w_obstacle_front * (self.safe_dist_front - min_front_dist)",
+            "safe_distance_front": 0.4,
+            "w_obstacle_front": 4.0,
+            "safe_distance_side_formula": "side_penalty = -self.w_obstacle_side * (self.safe_dist_side - min_side_dist)",
+            "safe_distance_side": 0.3,
+            "w_obstacle_side": 1.5,
+            "rotation_penalty_formula": "rotation_penalty = -self.w_rotation * abs(angular_velocity)",
+            "w_rotation": 0.05,
+            "wiggle_penalty_formula": "wiggle_penalty = -self.w_wiggle * action_diff",
+            "w_wiggle": 0.08,
+            "heading_formula": "facing_goal = abs(diff_rad_norm) <= self.heading_margin",
+            "heading": 2.0,
+            "heading_margin": 0.2,
+            "standoff_formula": "at_standoff = abs(dist_ghost - self.standoff_dist) <= self.standoff_margin",
+            "standoff_dist": 0.5,
+            "standoff_margin": 0.15
+        }
+    },
+    "vec_normalize_settings": {
+        "norm_obs": true,
+        "norm_reward": true,
+        "clip_obs": 10.0,
+        "initial_obs_rms_mean": 0.0
+    }
+}

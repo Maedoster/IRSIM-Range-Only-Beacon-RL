@@ -1,0 +1,14 @@
+{
+    "total_episodes": 1000,
+    "success_rate": 91.9,
+    "collision_rate": 6.4,
+    "timeout_rate": 1.0,
+    "collision_goal_rate": 0.7000000000000001,
+    "mean_reward": 12.742020177665356,
+    "mean_steps": 163.758,
+    "mean_error": 0.000689685912882094,
+    "successful_episodes": 919,
+    "collision_episodes": 64,
+    "timeout_episodes": 10,
+    "collision_goal_episodes": 7
+}
