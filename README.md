@@ -75,39 +75,42 @@ cd IRSIM-Range-Only-Beacon-RL
 
 Run the preprocessing tasks sequentially to parse layouts, split datasets, and extract occupancy grids:
 
-# 1. Convert raw dataset layouts into IR-Sim compatible formats
 ```bash
+# 1. Convert raw dataset layouts into IR-Sim compatible formats
 pixi run convert
 ```
-# 2. Split dataset into training, validation, and testing splits
+
 ```bash
+# 2. Split dataset into training, validation, and testing splits
 pixi run split
 ```
-# 3. Generate occupancy grids required for path planning & state estimation
+
 ```bash
+# 3. Generate occupancy grids required for path planning & state estimation
 pixi run occupancy
 ```
 
 ## 🚀 Training & Evaluation
 ### 1. Training the Agent
 
-Launch the Deep RL training loop:
-Bash
 
+```bash
+# Launch the Deep RL training loop:
 pixi run train
+```
 
-To monitor training curves and evaluation metrics in real time:
-Bash
-
+```bash
+# Monitor training curves and evaluation metrics in real time:
 pixi run tensorboard
-
+```
 ### 2. Evaluating & Running Models
 
-Ensure your target model checkpoint is inside Best_Models/, then run:
-Bash
-
+Ensure your target model checkpoint is inside the best_model/ folder in the trained models or a custom folder/, then run:
+```bash
 # Evaluate policy performance across test environments
 pixi run test
-
+```
+```bash
 # Render live trajectory execution in IR-Sim
 pixi run run
+```
