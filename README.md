@@ -111,17 +111,17 @@ The training script supports several CLI arguments to configure the algorithm, s
 | Category | Flag | Type / Choices | Description |
 | :--- | :--- | :--- | :--- |
 | **General** | `--algorithm` | `DDPG`, `TD3`, `PPO`, `SAC` | RL policy architecture to train |
-| | `--pf-active` / `--no-pf-active` | `bool` | Enable/disable Particle Filter state estimation |
+| | `--pf-active` | `bool` | Enable/disable Particle Filter state estimation |
 | | `--seed` | `int` | Random seed for reproducibility |
 | **Training** | `--num-envs` | `int` | Number of parallel Gym vector environments |
 | | `--total-timesteps` | `int` | Total environment interaction steps |
 | | `--eval-episodes` | `int` | Number of episodes per evaluation cycle |
 | | `--save-freq` | `int` | Frequency (in steps) to save model checkpoints |
 | | `--eval-freq` | `int` | Frequency (in steps) to trigger evaluation |
-| **Evaluation** | `--use-dummy-eval` / `--no-use-dummy-eval` | `bool` | Use single DummyVecEnv vs SubprocVecEnv during eval |
+| **Evaluation** | `--use-dummy-eval` | `bool` | Use single DummyVecEnv vs SubprocVecEnv during eval |
 | | `--num-eval-envs` | `int` | Number of parallel evaluation environments |
 | | `--save-eval-maps` | `bool` | Save visual trajectory maps generated during eval |
-| **Resume** | `--run-folder-name` | `str` | Subfolder name under `Best_Models/` to resume |
+| **Resume** | `--run-folder-name` | `str` | Subfolder name under `models/` to resume |
 | | `--checkpoint-name` | `str` | Specific `.zip` checkpoint file to resume training |
 
 ---
@@ -141,8 +141,8 @@ pixi run test
 
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--experiment-dir` | `str` | `run_DDPG_True_1` | Experiment subfolder name inside `Best_Models/` |
-| `--model-name` | `str` | `best_model` | Model file name without extension (`.zip` / `.pkl`) |
+| `--experiment-dir` | `str` | `run_DDPG_True_1` | Experiment subfolder name inside `models/` |
+| `--model-name` | `str` | `best_model` | Model file name without extension (`.zip` / `.pkl`), it looks in the best_model/ subfolder |
 | `--num-episodes` | `int` | `1000` | Total number of test episodes to execute |
 | `--num-envs` | `int` | `14` | Number of parallel worker environments |
 | `--seed` | `int` | `1` | Base random seed for reproducibility |
@@ -158,7 +158,7 @@ pixi run run
 #### Interactive Trajectory Execution Arguments (`pixi run run`)
 | Flag | Type | Description |
 | :--- | :--- | :--- |
-| `--experiment` | `str` | Experiment subfolder name inside `Best_Models/` |
+| `--experiment` | `str` | Experiment subfolder name inside `models/` |
 | `--model` | `str` | Target model file name without extension |
 | `--episodes` | `int` | Total number of episodes to render |
 | `--seed` | `int` | Initial random seed |
