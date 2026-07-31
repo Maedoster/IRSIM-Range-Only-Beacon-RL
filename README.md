@@ -23,6 +23,10 @@ Autonomous navigation in sparse-sensor environments requires robust state estima
 
 ---
 
+## 🎬 Demo & Trajectory Execution
+
+![Agent Navigation Demo](Demo.gif)
+
 ## 🏗️ System Architecture
 
 The figure below outlines the modular design of the system architecture, illustrating the separation between the Gym environment wrapper dynamics and the external policy optimization loop:
