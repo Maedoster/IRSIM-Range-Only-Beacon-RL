@@ -1,3 +1,4 @@
+<img width="195" height="173" alt="DemoPF" src="https://github.com/user-attachments/assets/5004511a-40be-4a86-ab48-4dc70046bcad" />
 # Autonomous Robot Navigation via Deep Reinforcement Learning with State Estimation
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -25,7 +26,7 @@ Autonomous navigation in sparse-sensor environments requires robust state estima
 
 ## 🎬 Demo & Trajectory Execution
 
-![Agent Navigation Demo](Demo.gif)
+<img width="195" height="173" alt="DemoPF" src="https://github.com/user-attachments/assets/456344f9-b23e-4ae4-87d6-a56b2d82a4eb" />
 
 ## 🏗️ System Architecture
 
