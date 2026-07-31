@@ -26,3 +26,72 @@ Autonomous navigation in sparse-sensor environments requires robust state estima
 ## 🏗️ System Architecture
 
 The figure below outlines the modular design of the system architecture, illustrating the separation between the Gym environment wrapper dynamics and the external policy optimization loop:
+
+
+## ⚙️ Installation & Environment Setup
+
+This project uses **[Pixi](https://pixi.sh)** for reproducible environment management and task execution.
+
+### 1. Prerequisites
+Install Pixi on your machine (if not already installed):
+```bash
+curl -fsSL [https://pixi.sh/install.sh](https://pixi.sh/install.sh) | bash
+
+2. Clone & Initialize
+Bash
+
+git clone [https://github.com/Maedoster/IRSIM-Range-Only-Beacon-RL.git](https://github.com/Maedoster/IRSIM-Range-Only-Beacon-RL.git)
+cd IRSIM-Range-Only-Beacon-RL
+
+# Install all dependencies and build the virtual environment
+pixi install
+
+🚀 Quickstart Guide
+
+Running the project requires executing the data generation pipeline sequentially before initiating training or evaluation.
+Step 1: Prepare the Dataset Pipeline
+
+Before running training or testing, you must convert the raw dataset, split it into train/test subsets, and pre-generate the occupancy grid maps:
+Bash
+
+# 1. Convert raw HouseExpo dataset into IR-Sim compatible formats
+pixi run convert
+
+# 2. Split dataset into training and evaluation sets
+pixi run split
+
+# 3. Generate occupancy grid maps for state estimation and collision checking
+pixi run occupancy
+
+Step 2: Training & Monitoring
+Start Training
+
+To start training the RL agent:
+Bash
+
+pixi run train
+
+Monitor Progress via TensorBoard
+
+To track reward curves, episode lengths, and policy loss metrics in real-time:
+Bash
+
+pixi run tensorboard
+
+Then open http://localhost:6006 in your web browser.
+Step 3: Evaluation & Visualization
+Run Policy Evaluation
+
+To evaluate a trained model's navigation performance:
+Bash
+
+pixi run test
+
+Visualize & Render Execution
+
+To visualize and render the live agent trajectories in IR-Sim, load the desired checkpoint from the Best_Models/ directory (e.g., pointing to Best_Models/run_SAC_True_1/best_model.zip):
+Bash
+
+pixi run run
+
+    Note on Model Checkpoints: Ensure that pixi run run or your evaluation script is pointing to the correct model checkpoint path within the Best_Models/ folder (or specify the path in your config/arguments).
